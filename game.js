@@ -1477,6 +1477,8 @@ class NeonVibeGame {
         .then(() => {
           this.isVK = true;
           console.log('✅ VK Bridge успешно инициализирован');
+          // Request optimal desktop iframe window size in VK
+          vkBridge.send('VKWebAppResizeWindow', { width: 1000, height: 750 }).catch(() => {});
         })
         .catch(err => {
           console.log('VK Bridge init info:', err);
