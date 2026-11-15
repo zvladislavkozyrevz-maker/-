@@ -6,9 +6,13 @@
   <title>⚡ Neon Vibe Clicker — Неоновый Вайб-Кликер</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@500;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+  <!-- Yandex Games SDK -->
+  <script src="https://yandex.ru/games/sdk/v2"></script>
+  <!-- VK Bridge SDK for VK Games -->
+  <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
 </head>
 <body class="theme-era-0">
   <!-- Canvas for dynamic neon effects & particle bursts -->
@@ -50,6 +54,12 @@
         <button id="btn-rebirth-shop" class="icon-btn shards-btn" title="Магазин Нейро-Осколков">
           <span class="btn-icon">💠</span>
           <span class="btn-label"><span id="shards-display">0</span></span>
+        </button>
+
+        <!-- Yandex Rewarded Ad Boost -->
+        <button id="btn-ad-boost" class="icon-btn ad-btn" title="Смотреть рекламу: супер-буст x5 на 2 минуты!">
+          <span class="btn-icon">🎬</span>
+          <span class="btn-label">Буст x5</span>
         </button>
 
         <!-- Audio controls -->
@@ -363,9 +373,14 @@
           <span id="offline-earned" class="neon-cyan font-bold">+0</span>
           <span class="offline-unit">Вайба</span>
         </div>
-        <button id="btn-claim-offline" class="cyber-btn primary large">
-          <span>Собрать энергию!</span>
-        </button>
+        <div class="offline-actions-row">
+          <button id="btn-claim-offline-x2" class="cyber-btn primary large ad-claim-btn" title="Смотреть рекламу и удвоить награду!">
+            <span>🎬 Забрать x2 Вайб (+ реклама)</span>
+          </button>
+          <button id="btn-claim-offline" class="cyber-btn large">
+            <span>Обычный сбор</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>

@@ -526,6 +526,13 @@ class NeonVibeGame {
     };
 
     this.autoTapTimer = 0;
+    this.ysdk = null;
+    this.yPlayer = null;
+
+    // Yandex Ad DOM elements
+    this.dom.btnAdBoost = document.getElementById('btn-ad-boost');
+    this.dom.btnClaimOfflineX2 = document.getElementById('btn-claim-offline-x2');
+
     this.init();
   }
 
@@ -560,6 +567,8 @@ class NeonVibeGame {
 
   init() {
     this.loadGame();
+    this.initYandexSDK();
+    this.initVKBridge();
     this.applyEraTheme();
     this.setupEventListeners();
     this.renderShop();
@@ -1105,18 +1114,19 @@ class NeonVibeGame {
       prodHtml += `
         <div class="shop-item-card ${canAfford ? '' : 'cant-afford'}" data-buy-prod="${prod.id}">
           <div class="item-icon-box">${prod.icon}</div>
-          <div class="item-details">
-            <div class="item-top-row">
-              <span class="item-title">${prod.name}</span>
-              <span class="item-owned">×${prod.count}</span>
-            </div>
+          <div class="item-info-col">
+            <span class="item-title">${prod.name}</span>
             <p class="item-desc">${prod.desc}</p>
-            <div class="item-stats-row">
-              <span class="item-production">+${formatNumber(prod.baseVps)}/сек ${prod.count > 0 ? `(всего +${formatNumber(totalIncome)})` : ''}</span>
-              <div class="item-cost-btn">
-                <span>✨</span>
-                <span>${formatNumber(cost)}</span>
-              </div>
+            <div class="item-production-badge">
+              <span class="prod-val">+${formatNumber(prod.baseVps)}/сек</span>
+              ${prod.count > 0 ? `<span class="prod-total">(всего +${formatNumber(totalIncome)}/сек)</span>` : ''}
+            </div>
+          </div>
+          <div class="item-action-col">
+            <div class="item-owned-tag">×${prod.count}</div>
+            <div class="item-cost-btn">
+              <span class="currency-glyph">✨</span>
+              <span class="cost-val">${formatNumber(cost)}</span>
             </div>
           </div>
         </div>
@@ -1130,21 +1140,24 @@ class NeonVibeGame {
       const isMaxed = b.maxCount && b.count >= b.maxCount;
       const cost = this.getBoosterCost(b);
       const canAfford = this.score >= cost && !isMaxed;
+      const boostText = b.bonusVpc
+        ? `+${b.bonusVpc} к силе клика`
+        : (b.resonancePercent ? `+1.5% от дохода к клику` : `+12% к шансу крита`);
 
       boostHtml += `
         <div class="shop-item-card ${canAfford ? '' : 'cant-afford'} ${isMaxed ? 'disabled' : ''}" data-buy-boost="${b.id}">
           <div class="item-icon-box">${b.icon}</div>
-          <div class="item-details">
-            <div class="item-top-row">
-              <span class="item-title">${b.name}</span>
-              <span class="item-owned">${isMaxed ? 'MAX' : `ур. ${b.count}`}</span>
-            </div>
+          <div class="item-info-col">
+            <span class="item-title">${b.name}</span>
             <p class="item-desc">${b.desc}</p>
-            <div class="item-stats-row">
-              <span class="item-production">${b.bonusVpc ? `+${b.bonusVpc} к клику` : ''}</span>
-              <div class="item-cost-btn">
-                ${isMaxed ? '<span>МАКСИМУМ</span>' : `<span>✨</span><span>${formatNumber(cost)}</span>`}
-              </div>
+            <div class="item-production-badge">
+              <span class="prod-val">${boostText}</span>
+            </div>
+          </div>
+          <div class="item-action-col">
+            <div class="item-owned-tag">${isMaxed ? 'MAX' : `ур. ${b.count}`}</div>
+            <div class="item-cost-btn">
+              ${isMaxed ? '<span class="cost-max">МАКСИМУМ</span>' : `<span class="currency-glyph">✨</span><span class="cost-val">${formatNumber(cost)}</span>`}
             </div>
           </div>
         </div>
@@ -1261,6 +1274,9 @@ class NeonVibeGame {
       window.neonAudio.playRebirth();
     }
 
+    // Полноэкранная реклама Яндекса при перерождении
+    this.showInterstitialAd();
+
     // Reset standard stats
     this.score = 0;
     this.combo = 0;
@@ -1311,17 +1327,17 @@ class NeonVibeGame {
       html += `
         <div class="shop-item-card ${canAfford ? '' : 'cant-afford'} ${isMax ? 'disabled' : ''}" data-buy-rebirth-up="${u.id}">
           <div class="item-icon-box">${u.icon}</div>
-          <div class="item-details">
-            <div class="item-top-row">
-              <span class="item-title">${u.name}</span>
-              <span class="item-owned">${isMax ? 'MAX' : `ур. ${u.level}`}</span>
-            </div>
+          <div class="item-info-col">
+            <span class="item-title">${u.name}</span>
             <p class="item-desc">${u.desc}</p>
-            <div class="item-stats-row">
-              <span class="item-production">Постоянный перк</span>
-              <div class="item-cost-btn">
-                ${isMax ? '<span>МАКС</span>' : `<span>💠</span><span>${formatNumber(cost)}</span>`}
-              </div>
+            <div class="item-production-badge">
+              <span class="prod-val">Постоянный перк</span>
+            </div>
+          </div>
+          <div class="item-action-col">
+            <div class="item-owned-tag">${isMax ? 'MAX' : `ур. ${u.level}`}</div>
+            <div class="item-cost-btn">
+              ${isMax ? '<span class="cost-max">МАКС</span>' : `<span class="currency-glyph">💠</span><span class="cost-val">${formatNumber(cost)}</span>`}
             </div>
           </div>
         </div>
@@ -1425,6 +1441,134 @@ class NeonVibeGame {
   }
 
   /**
+   * Yandex Games SDK Integration & Monetization
+   */
+  initYandexSDK() {
+    if (typeof YaGames !== 'undefined') {
+      YaGames.init().then(ysdk => {
+        this.ysdk = ysdk;
+        console.log('✅ Yandex Games SDK успешно инициализирован');
+
+        // Оповещение Яндекса о готовности игры (ОБЯЗАТЕЛЬНО для модерации!)
+        if (ysdk.features && ysdk.features.LoadingAPI) {
+          ysdk.features.LoadingAPI.ready();
+        }
+
+        // Облачные сохранения через аккаунт игрока
+        ysdk.getPlayer({ scopes: false }).then(player => {
+          this.yPlayer = player;
+          this.loadGameFromCloud();
+        }).catch(err => {
+          console.log('Игрок не авторизован в Яндексе, используются локальные сохранения');
+        });
+      }).catch(err => {
+        console.warn('YaGames.init error:', err);
+      });
+    }
+  }
+
+  /**
+   * VK Bridge SDK Integration for VK Games / VK Mini Apps
+   */
+  initVKBridge() {
+    this.isVK = false;
+    if (typeof vkBridge !== 'undefined') {
+      vkBridge.send('VKWebAppInit')
+        .then(() => {
+          this.isVK = true;
+          console.log('✅ VK Bridge успешно инициализирован');
+        })
+        .catch(err => {
+          console.log('VK Bridge init info:', err);
+        });
+    }
+  }
+
+  muteAudio(mute) {
+    if (window.neonAudio && window.neonAudio.ctx && window.neonAudio.masterGain) {
+      const targetVol = mute ? 0 : window.neonAudio.volume;
+      window.neonAudio.masterGain.gain.setValueAtTime(targetVol, window.neonAudio.ctx.currentTime);
+    }
+  }
+
+  /**
+   * Просмотр рекламы за вознаграждение (Rewarded Video)
+   */
+  showRewardedAd(onRewarded) {
+    if (this.isVK && typeof vkBridge !== 'undefined') {
+      this.muteAudio(true);
+      vkBridge.send('VKWebAppShowNativeAds', { ad_format: 'reward' })
+        .then(data => {
+          this.muteAudio(false);
+          if (data && data.result) {
+            if (onRewarded) onRewarded();
+          }
+        })
+        .catch(err => {
+          this.muteAudio(false);
+          console.warn('VK Rewarded ad error', err);
+          if (onRewarded) onRewarded();
+        });
+    } else if (this.ysdk && this.ysdk.adv) {
+      this.ysdk.adv.showRewardedVideo({
+        callbacks: {
+          onOpen: () => this.muteAudio(true),
+          onRewarded: () => {
+            if (onRewarded) onRewarded();
+          },
+          onClose: () => this.muteAudio(false),
+          onError: (e) => {
+            this.muteAudio(false);
+            console.warn('Rewarded ad error', e);
+            if (onRewarded) onRewarded();
+          }
+        }
+      });
+    } else {
+      // Режим локального тестирования
+      this.showToast('🎬 РЕКЛАМА', 'Тестовый показ! Награда успешно начислена.', 'meme-toast', 'БОНУС ПРОСМОТРА 🎬');
+      if (onRewarded) onRewarded();
+    }
+  }
+
+  /**
+   * Полноэкранная реклама (Interstitial)
+   */
+  showInterstitialAd() {
+    if (this.isVK && typeof vkBridge !== 'undefined') {
+      this.muteAudio(true);
+      vkBridge.send('VKWebAppShowNativeAds', { ad_format: 'interstitial' })
+        .then(() => this.muteAudio(false))
+        .catch(() => this.muteAudio(false));
+    } else if (this.ysdk && this.ysdk.adv) {
+      this.ysdk.adv.showFullscreenAdv({
+        callbacks: {
+          onOpen: () => this.muteAudio(true),
+          onClose: () => this.muteAudio(false),
+          onError: () => this.muteAudio(false)
+        }
+      });
+    }
+  }
+
+  loadGameFromCloud() {
+    if (!this.yPlayer) return;
+    this.yPlayer.getData().then(cloudData => {
+      if (cloudData && cloudData.score !== undefined) {
+        // Если в облаке больше прогресса, чем локально
+        if ((cloudData.totalScoreEarned || 0) > this.totalScoreEarned) {
+          console.log('Загрузка прогресса из Яндекс Облака');
+          this.applyLoadedData(cloudData);
+          this.renderShop();
+          this.renderOrbitBadges();
+          this.renderRebirthShop();
+          this.updateUI();
+        }
+      }
+    }).catch(e => console.warn('Cloud load error', e));
+  }
+
+  /**
    * Save & Load Engine
    */
   saveGame() {
@@ -1446,7 +1590,13 @@ class NeonVibeGame {
         achievements: this.achievements.filter(a => a.unlocked).map(a => a.id)
       };
 
+      // Локальное сохранение
       localStorage.setItem(this.saveKey, JSON.stringify(data));
+
+      // Облачное сохранение Яндекса
+      if (this.yPlayer) {
+        this.yPlayer.setData(data, true).catch(e => console.warn('Cloud save error', e));
+      }
 
       if (this.dom.saveIndicator) {
         this.dom.saveIndicator.style.opacity = '1';
@@ -1607,6 +1757,39 @@ class NeonVibeGame {
       this.renderRebirthShop();
       this.dom.modalRebirthShop.classList.remove('hidden');
     });
+
+    // Yandex Rewarded Video Buttons
+    if (this.dom.btnAdBoost) {
+      this.dom.btnAdBoost.addEventListener('click', () => {
+        this.showRewardedAd(() => {
+          this.activeBuffs.push({
+            id: 'ad_boost_' + Date.now(),
+            name: 'Яндекс Буст',
+            icon: '⚡',
+            multiplier: 5,
+            duration: 120
+          });
+          this.showToast('🎬 БУСТ АКТИВИРОВАН!', 'x5 множитель всего заработка на 2 минуты!', 'meme-toast', 'СУПЕР-УСКОРЕНИЕ 🚀');
+          if (window.neonAudio) window.neonAudio.playBonus();
+        });
+      });
+    }
+
+    if (this.dom.btnClaimOfflineX2) {
+      this.dom.btnClaimOfflineX2.addEventListener('click', () => {
+        this.showRewardedAd(() => {
+          if (this.offlinePendingReward) {
+            const doubled = this.offlinePendingReward * 2;
+            this.score += doubled;
+            this.totalScoreEarned += doubled;
+            this.offlinePendingReward = 0;
+            this.showToast('💰 НАГРАДА УДВОЕНА!', `Получено +${formatNumber(doubled)} вайба за просмотр рекламы!`, 'meme-toast', 'БОНУС ЯНДЕКСА 🎬');
+          }
+          closeModal(this.dom.modalOffline);
+          if (window.neonAudio) window.neonAudio.playBonus();
+        });
+      });
+    }
 
     // Audio & Music Toggles
     this.dom.btnAudio.addEventListener('click', () => {
