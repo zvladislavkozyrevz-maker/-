@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>⚡ Neon Vibe Clicker — Неоновый Вайб-Кликер</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+</head>
+<body class="theme-era-0">
+  <!-- Canvas for dynamic neon effects & particle bursts -->
+  <canvas id="fx-canvas"></canvas>
+
+  <!-- Fullscreen Rebirth Cyber Warp Grid Overlay -->
+  <div id="rebirth-warp-overlay" class="rebirth-warp-overlay hidden">
+    <div class="warp-grid-perspective">
+      <div class="warp-grid-lines"></div>
+    </div>
+    <div class="warp-content">
+      <div class="warp-particles"></div>
+      <div class="warp-glitch-badge">⚠️ СМЕНА РЕАЛЬНОСТИ ⚠️</div>
+      <h2 class="warp-glitch-title">КВАНТОВЫЙ СКАЧОК</h2>
+      <div class="warp-era-name" id="warp-era-title">ЭРА: DEEPSEEK 🐳</div>
+      <p class="warp-subtitle">Матрица переписана. Вселенная ускорена!</p>
+    </div>
+  </div>
+
+  <div class="app-layout">
+    <!-- Header: Game Title, Quick Controls, Sound & Save -->
+    <header class="game-header">
+      <div class="logo-group">
+        <div class="logo-icon" id="header-logo-icon">⚡</div>
+        <div>
+          <h1 class="logo-title">VIBE<span class="neon-pink">CLICKER</span></h1>
+          <p class="logo-subtitle" id="current-era-badge">Эра: Базовая</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <!-- Rebirth buttons -->
+        <button id="btn-rebirth" class="icon-btn rebirth-btn" title="Уровень перерождения и квантовый скачок">
+          <span class="btn-icon">🌌</span>
+          <span class="btn-label" id="rebirth-btn-text">Перерождение</span>
+          <span class="rebirth-progress-pill" id="rebirth-pill">0/150 👆</span>
+        </button>
+
+        <button id="btn-rebirth-shop" class="icon-btn shards-btn" title="Магазин Нейро-Осколков">
+          <span class="btn-icon">💠</span>
+          <span class="btn-label"><span id="shards-display">0</span></span>
+        </button>
+
+        <!-- Audio controls -->
+        <button id="btn-audio" class="icon-btn" title="Звуковые эффекты">
+          <span class="btn-icon">🔊</span>
+          <span class="btn-label">Звук</span>
+        </button>
+        <button id="btn-music" class="icon-btn" title="Фоновый Синт-Вайб">
+          <span class="btn-icon">🎵</span>
+          <span class="btn-label">Вайб-фон</span>
+        </button>
+        <!-- Stats modal trigger -->
+        <button id="btn-stats" class="icon-btn" title="Статистика и Достижения">
+          <span class="btn-icon">📊</span>
+          <span class="btn-label">Инфо</span>
+        </button>
+        <!-- Save/Reset controls -->
+        <button id="btn-settings" class="icon-btn" title="Настройки и Сохранение">
+          <span class="btn-icon">⚙️</span>
+          <span class="btn-label">Опции</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <main class="main-content">
+      <!-- Left Column: The Vibe Core (Click Area) -->
+      <section class="clicker-section" id="clicker-section">
+        <!-- Floating Numbers Target Container -->
+        <div id="float-container" class="float-container"></div>
+
+        <!-- Random Floating Glitch Bonus / Neon Crystal (strictly confined inside clicker section) -->
+        <div id="lucky-crystal" class="lucky-crystal hidden" title="Хватай бонус!">
+          <div class="lucky-crystal-inner">💎</div>
+          <span class="lucky-crystal-badge">LUCKY!</span>
+        </div>
+
+        <!-- Score & Stats Display -->
+        <div class="score-card">
+          <div class="score-label">ВАШ ВАЙБ</div>
+          <div class="score-val-wrapper">
+            <span class="currency-symbol" id="score-currency-icon">✨</span>
+            <span id="score-display" class="score-val">0</span>
+          </div>
+          <div class="stats-row">
+            <div class="stat-badge" title="Вайб генерируется в секунду">
+              <span class="stat-icon">⚡</span>
+              <span class="stat-text"><span id="vps-display">0</span> / сек</span>
+            </div>
+            <div class="stat-badge" title="Вайб за один клик">
+              <span class="stat-icon">👆</span>
+              <span class="stat-text"><span id="vpc-display">1</span> / клик</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Combo / Fever Gauge -->
+        <div class="combo-container">
+          <div class="combo-header">
+            <span class="combo-title">КОМБО-РАЗГОН: <strong id="combo-multiplier" class="neon-cyan">x1.0</strong></span>
+            <span id="combo-status" class="combo-status">Кликай быстрее!</span>
+          </div>
+          <div class="combo-bar-bg">
+            <div id="combo-bar" class="combo-bar"></div>
+          </div>
+        </div>
+
+        <!-- Interactive Neon Vibe Core Area (Large Click Area) -->
+        <div class="core-stage" id="core-stage" title="Кликай в любой точке этой зоны!">
+          <div class="core-glow-backdrop" id="core-glow-backdrop"></div>
+          <div class="core-rings">
+            <div class="ring ring-1"></div>
+            <div class="ring ring-2"></div>
+            <div class="ring ring-3"></div>
+          </div>
+
+          <!-- Orbiting Badges Container (Purchased AI / Buffs appear here) -->
+          <div class="orbit-badges-container" id="orbit-badges-container"></div>
+
+          <div id="vibe-core" class="vibe-core" aria-label="Собрать вайб">
+            <div class="core-inner">
+              <div class="core-crystal" id="core-crystal">
+                <span class="core-symbol" id="core-symbol-icon">⚡</span>
+              </div>
+            </div>
+            <div class="core-pulse-wave"></div>
+          </div>
+        </div>
+
+        <!-- Active Buffs Indicator (Beside / under the clicker) -->
+        <div id="active-buffs" class="active-buffs-container"></div>
+      </section>
+
+      <!-- Right Column: Shop & Upgrades Center -->
+      <section class="shop-section">
+        <!-- Shop Tabs Navigation -->
+        <div class="shop-tabs">
+          <button class="shop-tab active" data-tab="producers">
+            <span class="tab-icon">🏭</span>
+            <span>Авто-вайб</span>
+          </button>
+          <button class="shop-tab" data-tab="boosters">
+            <span class="tab-icon">⚡</span>
+            <span>Усилители клика</span>
+          </button>
+          <button class="shop-tab" data-tab="achievements">
+            <span class="tab-icon">🏆</span>
+            <span>Ачивки (<span id="achievements-count">0/15</span>)</span>
+          </button>
+        </div>
+
+        <!-- Tab 1: Auto-Clickers (Кофе, Энергетик, Видеокарта, Нейросети: Дипсик, Квен, Гемини, Чат ГПТ, Клод) -->
+        <div id="tab-producers" class="shop-tab-content active">
+          <div class="shop-header-info">
+            <span class="shop-subtitle">Автономные генераторы и квантовые нейросети</span>
+            <span class="save-status-indicator" id="save-indicator">💾 Сохранено</span>
+          </div>
+          <div id="producers-list" class="shop-items-list">
+            <!-- Dynamically injected via JavaScript -->
+          </div>
+        </div>
+
+        <!-- Tab 2: Click Boosters & Synergy Upgrades -->
+        <div id="tab-boosters" class="shop-tab-content">
+          <div class="shop-header-info">
+            <span class="shop-subtitle">Прокачка ручной мощи, резонанса и критов</span>
+          </div>
+          <div id="boosters-list" class="shop-items-list">
+            <!-- Dynamically injected via JavaScript -->
+          </div>
+        </div>
+
+        <!-- Tab 3: Achievements -->
+        <div id="tab-achievements" class="shop-tab-content">
+          <div class="shop-header-info">
+            <span class="shop-subtitle">Твои вехи на пути к абсолютной сингулярности</span>
+          </div>
+          <div id="achievements-list" class="achievements-grid">
+            <!-- Dynamically injected via JavaScript -->
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Toast Notification System -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Modal: Rebirth (Квантовое Перерождение) -->
+  <div id="modal-rebirth" class="modal-overlay hidden">
+    <div class="modal-box rebirth-modal-box">
+      <div class="modal-header">
+        <h2 class="modal-title">🌌 Квантовое Перерождение</h2>
+        <button class="modal-close" data-close="modal-rebirth">&times;</button>
+      </div>
+      <div class="modal-body text-center">
+        <div class="rebirth-era-card">
+          <div class="era-preview-row">
+            <div class="era-side">
+              <span class="era-caption">Текущая Эра</span>
+              <div class="era-avatar" id="rebirth-cur-avatar">⚡</div>
+              <strong id="rebirth-cur-name">Базовая</strong>
+            </div>
+            <div class="era-arrow">➔</div>
+            <div class="era-side next-era">
+              <span class="era-caption">Следующая Эра</span>
+              <div class="era-avatar next" id="rebirth-next-avatar">🐳</div>
+              <strong id="rebirth-next-name" class="neon-cyan">DeepSeek</strong>
+            </div>
+          </div>
+          <p class="rebirth-quote" id="rebirth-era-quote">«Китайский мемный гений, переворачивающий индустрию AI!»</p>
+        </div>
+
+        <!-- Clicks Requirement Progress -->
+        <div class="rebirth-progress-box">
+          <div class="rebirth-progress-labels">
+            <span>Прогресс кликов для перехода:</span>
+            <strong id="rebirth-clicks-num">0 / 150</strong>
+          </div>
+          <div class="rebirth-bar-bg">
+            <div id="rebirth-bar-fill" class="rebirth-bar-fill"></div>
+          </div>
+          <small class="rebirth-tip">💡 В режиме ГИПЕР-ВАЙБ клики считаются с x2 скоростью, а криты — с x3!</small>
+        </div>
+
+        <!-- Shards reward -->
+        <div class="rebirth-reward-card">
+          <span class="rebirth-reward-icon">💠</span>
+          <div>
+            <div class="rebirth-reward-val">+<span id="rebirth-shards-reward">10</span> Нейро-Осколков</div>
+            <div class="rebirth-reward-sub">Валюта для постоянных улучшений в Магазине Перерождения</div>
+          </div>
+        </div>
+
+        <p class="rebirth-warning">
+          ⚠️ При перерождении сбрасываются очки вайба и базовые авто-кликеры, но сохраняются <strong>все ачивки, нейро-осколки и постоянные перки</strong>, а также открывается новая нейросеть и уникальный неоновый стиль!
+        </p>
+
+        <button id="btn-do-rebirth" class="cyber-btn primary large rebirth-action-btn disabled">
+          <span>СОВЕРШИТЬ ПЕРЕРОЖДЕНИЕ! 🌌</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Rebirth Shop (Магазин Перерождения) -->
+  <div id="modal-rebirth-shop" class="modal-overlay hidden">
+    <div class="modal-box rebirth-shop-box">
+      <div class="modal-header">
+        <h2 class="modal-title">🔮 Магазин Нейро-Осколков</h2>
+        <div class="modal-shards-badge">
+          <span>💠</span>
+          <span id="modal-shards-count">0</span>
+        </div>
+        <button class="modal-close" data-close="modal-rebirth-shop">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">Постоянные мета-улучшения матрицы, действующие сквозь все эры и перерождения:</p>
+        <div id="rebirth-upgrades-list" class="rebirth-items-list">
+          <!-- Injected via JavaScript -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Stats & Info -->
+  <div id="modal-stats" class="modal-overlay hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2 class="modal-title">📊 Статистика Вайбера</h2>
+        <button class="modal-close" data-close="modal-stats">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <span class="stat-card-label">Всего заработано</span>
+            <span id="st-total-vibe" class="stat-card-val neon-cyan">0</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-card-label">Сделано кликов</span>
+            <span id="st-total-clicks" class="stat-card-val neon-pink">0</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-card-label">Уровень перерождения</span>
+            <span id="st-rebirth-level" class="stat-card-val neon-yellow">0</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-card-label">Нейро-Осколки</span>
+            <span id="st-total-shards" class="stat-card-val">0</span>
+          </div>
+        </div>
+        <div class="modal-desc-box">
+          <p>💡 <strong>Совет:</strong> Кликайте в любой точке левой панели, чтобы набивать комбо. В режиме <em>ГИПЕР-ВАЙБ (x3.5)</em> вы быстрее наберете клики для нового уровня перерождения!</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Settings & Save Management -->
+  <div id="modal-settings" class="modal-overlay hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2 class="modal-title">⚙️ Управление Игрой</h2>
+        <button class="modal-close" data-close="modal-settings">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="settings-group">
+          <label class="setting-item">
+            <span>Качество спецэффектов (FPS)</span>
+            <select id="setting-fx-quality" class="styled-select">
+              <option value="high" selected>Ультра (Все частицы)</option>
+              <option value="medium">Оптимально</option>
+              <option value="low">Экономно</option>
+            </select>
+          </label>
+          <label class="setting-item">
+            <span>Громкость звуков</span>
+            <input type="range" id="setting-sfx-volume" min="0" max="100" value="70" class="styled-slider">
+          </label>
+        </div>
+
+        <div class="settings-actions">
+          <button id="btn-force-save" class="cyber-btn primary">
+            <span>💾 Сохранить сейчас</span>
+          </button>
+          <button id="btn-export-save" class="cyber-btn">
+            <span>📤 Экспорт сохранения</span>
+          </button>
+          <button id="btn-import-save" class="cyber-btn">
+            <span>📥 Импорт сохранения</span>
+          </button>
+          <button id="btn-reset-game" class="cyber-btn danger">
+            <span>🗑️ Сбросить прогресс</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Offline Progress Greeting -->
+  <div id="modal-offline" class="modal-overlay hidden">
+    <div class="modal-box offline-modal">
+      <div class="modal-header">
+        <h2 class="modal-title">✨ С возвращением!</h2>
+        <button class="modal-close" data-close="modal-offline">&times;</button>
+      </div>
+      <div class="modal-body text-center">
+        <p class="offline-greeting">Пока вас не было в матрице (<span id="offline-time">0m</span>), ваши авто-системы трудились:</p>
+        <div class="offline-reward">
+          <span class="offline-icon">💰</span>
+          <span id="offline-earned" class="neon-cyan font-bold">+0</span>
+          <span class="offline-unit">Вайба</span>
+        </div>
+        <button id="btn-claim-offline" class="cyber-btn primary large">
+          <span>Собрать энергию!</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="audio.js"></script>
+  <script src="particles.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
