@@ -1479,6 +1479,27 @@ class NeonVibeGame {
           console.log('✅ VK Bridge успешно инициализирован');
           // Request optimal desktop iframe window size in VK
           vkBridge.send('VKWebAppResizeWindow', { width: 1000, height: 750 }).catch(() => {});
+
+          // Облачная синхронизация из базы данных ВКонтакте (VK Storage)
+          vkBridge.send('VKWebAppStorageGet', { keys: ['vibe_save_v1'] })
+            .then(res => {
+              if (res && res.keys && res.keys[0] && res.keys[0].value) {
+                try {
+                  const cloudData = JSON.parse(res.keys[0].value);
+                  if (cloudData && (cloudData.totalScoreEarned || 0) > (this.totalScoreEarned || 0)) {
+                    console.log('☁️ Загружено облачное сохранение из VK Storage');
+                    this.applySaveData(cloudData);
+                    this.updateDisplay();
+                    this.renderProducers();
+                    this.renderRebirthUpgrades();
+                    this.renderAchievements();
+                  }
+                } catch (e) {
+                  console.warn('VK storage parse error', e);
+                }
+              }
+            })
+            .catch(() => {});
         })
         .catch(err => {
           console.log('VK Bridge init info:', err);
@@ -1595,6 +1616,14 @@ class NeonVibeGame {
       // Локальное сохранение
       localStorage.setItem(this.saveKey, JSON.stringify(data));
 
+      // Облачное сохранение ВКонтакте (VK Storage)
+      if (this.isVK && typeof vkBridge !== 'undefined') {
+        vkBridge.send('VKWebAppStorageSet', {
+          key: 'vibe_save_v1',
+          value: JSON.stringify(data)
+        }).catch(e => console.warn('VK storage save error', e));
+      }
+
       // Облачное сохранение Яндекса
       if (this.yPlayer) {
         this.yPlayer.setData(data, true).catch(e => console.warn('Cloud save error', e));
@@ -1611,61 +1640,66 @@ class NeonVibeGame {
     }
   }
 
+  applySaveData(data) {
+    if (!data) return;
+    this.score = data.score || 0;
+    this.totalScoreEarned = data.totalScoreEarned || this.score;
+    this.totalClicks = data.totalClicks || 0;
+    this.totalBonuses = data.totalBonuses || 0;
+    this.rebirthLevel = data.rebirthLevel || 0;
+    this.rebirthClicks = data.rebirthClicks || 0;
+    this.neuroShards = data.neuroShards || 0;
+    this.totalShardsEarned = data.totalShardsEarned || 0;
+    this.startTime = data.startTime || Date.now();
+
+    // Producers
+    if (data.producers) {
+      for (const saved of data.producers) {
+        const prod = this.producers.find(p => p.id === saved.id);
+        if (prod) prod.count = saved.count;
+      }
+    }
+
+    // Boosters
+    if (data.boosters) {
+      for (const saved of data.boosters) {
+        const b = this.boosters.find(x => x.id === saved.id);
+        if (b) b.count = saved.count;
+      }
+    }
+
+    // Rebirth Upgrades
+    if (data.rebirthUpgrades) {
+      for (const saved of data.rebirthUpgrades) {
+        const u = this.rebirthUpgrades.find(x => x.id === saved.id);
+        if (u) u.level = saved.level;
+      }
+    }
+
+    // Achievements
+    if (data.achievements) {
+      for (const achId of data.achievements) {
+        const a = this.achievements.find(x => x.id === achId);
+        if (a) a.unlocked = true;
+      }
+    }
+
+    // Offline Progress Calculation
+    if (data.lastSaveTime) {
+      const elapsedSec = (Date.now() - data.lastSaveTime) / 1000;
+      if (elapsedSec > 10) {
+        this.processOfflineProgress(elapsedSec);
+      }
+    }
+  }
+
   loadGame() {
     try {
       const raw = localStorage.getItem(this.saveKey);
       if (!raw) return;
 
       const data = JSON.parse(raw);
-      this.score = data.score || 0;
-      this.totalScoreEarned = data.totalScoreEarned || this.score;
-      this.totalClicks = data.totalClicks || 0;
-      this.totalBonuses = data.totalBonuses || 0;
-      this.rebirthLevel = data.rebirthLevel || 0;
-      this.rebirthClicks = data.rebirthClicks || 0;
-      this.neuroShards = data.neuroShards || 0;
-      this.totalShardsEarned = data.totalShardsEarned || 0;
-      this.startTime = data.startTime || Date.now();
-
-      // Producers
-      if (data.producers) {
-        for (const saved of data.producers) {
-          const prod = this.producers.find(p => p.id === saved.id);
-          if (prod) prod.count = saved.count;
-        }
-      }
-
-      // Boosters
-      if (data.boosters) {
-        for (const saved of data.boosters) {
-          const b = this.boosters.find(x => x.id === saved.id);
-          if (b) b.count = saved.count;
-        }
-      }
-
-      // Rebirth Upgrades
-      if (data.rebirthUpgrades) {
-        for (const saved of data.rebirthUpgrades) {
-          const u = this.rebirthUpgrades.find(x => x.id === saved.id);
-          if (u) u.level = saved.level;
-        }
-      }
-
-      // Achievements
-      if (data.achievements) {
-        for (const achId of data.achievements) {
-          const a = this.achievements.find(x => x.id === achId);
-          if (a) a.unlocked = true;
-        }
-      }
-
-      // Offline Progress Calculation
-      if (data.lastSaveTime) {
-        const elapsedSec = (Date.now() - data.lastSaveTime) / 1000;
-        if (elapsedSec > 10) {
-          this.processOfflineProgress(elapsedSec);
-        }
-      }
+      this.applySaveData(data);
     } catch (e) {
       console.warn('Game load failed', e);
     }
