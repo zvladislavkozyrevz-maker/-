@@ -1247,17 +1247,17 @@ class AltushkaGame {
   /**
    * Handle Tap on Character / Stage
    */
-  handleClick(e) {
-    // Double click & trackpad spam protection (Item 11)
+  handleClick(e, isAutoTap = false) {
+    // Double click & trackpad spam protection (Item 11) - bypass for controlled auto-tap
     const now = Date.now();
-    if (this.lastTapTimestamp && (now - this.lastTapTimestamp < 24)) {
-      return; // Cap tap frequency to prevent browser freeze
+    if (!isAutoTap && this.lastTapTimestamp && (now - this.lastTapTimestamp < 24)) {
+      return; // Cap manual tap frequency to prevent browser freeze
     }
     this.lastTapTimestamp = now;
 
-    if (e && e.type === 'touchstart') {
+    if (!isAutoTap && e && e.type === 'touchstart') {
       this.lastTouchTimestamp = now;
-    } else if (e && e.type === 'mousedown') {
+    } else if (!isAutoTap && e && e.type === 'mousedown') {
       if (this.lastTouchTimestamp && (now - this.lastTouchTimestamp < 400)) {
         return; // ignore synthetic mousedown following touchstart
       }
@@ -1309,16 +1309,17 @@ class AltushkaGame {
     }
     this.combo = Math.min(this.maxCombo, this.combo + comboGain);
 
-    if (window.audioEngine) {
+    // Audio & particles throttled during rapid auto-tap to maintain silky smooth 60 FPS
+    if (window.audioEngine && (!isAutoTap || Math.random() < 0.12)) {
       window.audioEngine.playClick(comboMult, isCrit);
     }
 
-    if (window.particleEngine) {
+    if (window.particleEngine && (!isAutoTap || Math.random() < 0.18)) {
       window.particleEngine.spawnClickBurst(clientX, clientY, isCrit);
     }
 
     // High performance sprite tap feedback without forced reflow
-    if (this.dom.altushkaSprite) {
+    if (!isAutoTap && this.dom.altushkaSprite) {
       this.dom.altushkaSprite.classList.add('tap-active');
       clearTimeout(this.spriteTapTimer);
       this.spriteTapTimer = setTimeout(() => {
@@ -1326,9 +1327,11 @@ class AltushkaGame {
       }, 70);
     }
 
-    this.spawnFloatNumber(stageRelX, stageRelY, clickGain, isCrit);
+    if (!isAutoTap || Math.random() < 0.15) {
+      this.spawnFloatNumber(stageRelX, stageRelY, clickGain, isCrit);
+    }
 
-    if (Math.random() < 0.12) {
+    if (!isAutoTap && Math.random() < 0.12) {
       this.triggerSpeechQuote();
     }
 
@@ -2227,16 +2230,16 @@ class AltushkaGame {
   }
 
   /**
-   * Fast Auto-Clicker Turbo Mode (Item 4)
-   * Runs high-speed taps until Rebirth is available, then automatically stops and signals player.
+   * Ultra-Fast Auto-Clicker Turbo Mode (Item 4)
+   * High-speed batch clicks (500 taps/sec) to rapidly achieve Rebirth threshold without freezing UI.
    */
-  startAutoClicker(speedMs = 30) {
+  startAutoClicker(speedMs = 16, tapsPerTick = 8) {
     if (this.autoClickerInterval) return;
     this.isAutoClicking = true;
     if (this.dom.btnTurboClicker) {
       this.dom.btnTurboClicker.classList.add('active');
       const label = this.dom.btnTurboClicker.querySelector('.btn-label');
-      if (label) label.textContent = 'Тапает...';
+      if (label) label.textContent = '⚡ ТУРБО-ТАП';
     }
 
     this.autoClickerInterval = setInterval(() => {
@@ -2254,7 +2257,10 @@ class AltushkaGame {
         return;
       }
 
-      this.handleClick(null);
+      for (let i = 0; i < tapsPerTick; i++) {
+        if (this.rebirthClicks >= clicksNeeded) break;
+        this.handleClick(null, true);
+      }
     }, speedMs);
   }
 
@@ -2275,7 +2281,7 @@ class AltushkaGame {
     if (this.isAutoClicking) {
       this.stopAutoClicker();
     } else {
-      this.startAutoClicker(28);
+      this.startAutoClicker(16, 8);
     }
   }
 
