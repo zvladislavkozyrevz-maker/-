@@ -735,6 +735,7 @@ class AltushkaGame {
       headerLogoIcon: document.getElementById('header-logo-icon'),
       currentEraBadge: document.getElementById('current-era-badge'),
       btnRebirth: document.getElementById('btn-rebirth'),
+      btnTurboClicker: document.getElementById('btn-turbo-clicker'),
       rebirthBtnText: document.getElementById('rebirth-btn-text'),
       rebirthPill: document.getElementById('rebirth-pill'),
       btnRebirthShop: document.getElementById('btn-rebirth-shop'),
@@ -1348,23 +1349,23 @@ class AltushkaGame {
   spawnFloatNumber(relX, relY, amount, isCrit = false) {
     if (!this.dom.floatContainer) return;
 
-    // Strict cap on active floating numbers to avoid DOM thrashing (Item 11)
-    while (this.dom.floatContainer.children.length >= 8) {
+    // Strict cap to 4 max floating numbers so rapid taps never clutter the screen or catch the eye aggressively
+    while (this.dom.floatContainer.children.length >= 4) {
       this.dom.floatContainer.removeChild(this.dom.floatContainer.firstChild);
     }
 
     const el = document.createElement('div');
-    el.className = `float-num ${isCrit ? 'crit' : ''}`;
-    el.textContent = `${isCrit ? '🔥 CRIT! +' : '+'}${formatNumber(amount)} 🖤`;
+    el.className = `floating-num ${isCrit ? 'crit' : ''}`;
+    el.textContent = isCrit ? `✨ +${formatNumber(amount)}` : `+${formatNumber(amount)}`;
 
-    const randomOffsetX = (Math.random() - 0.5) * 36;
+    const randomOffsetX = (Math.random() - 0.5) * 28;
     el.style.left = `${Math.max(10, relX + randomOffsetX)}px`;
-    el.style.top = `${Math.max(10, relY - 15)}px`;
+    el.style.top = `${Math.max(10, relY - 10)}px`;
 
     this.dom.floatContainer.appendChild(el);
     setTimeout(() => {
       if (el.parentNode) el.parentNode.removeChild(el);
-    }, 900);
+    }, 550);
   }
 
   /**
@@ -1871,28 +1872,8 @@ class AltushkaGame {
   }
 
   showToast(title, desc, type = '', badgeText = '') {
-    if (!this.dom.toastContainer) return;
-
-    // Cap active toasts to 3 max to prevent screen flooding (Item 3)
-    while (this.dom.toastContainer.children.length >= 3) {
-      this.dom.toastContainer.removeChild(this.dom.toastContainer.firstChild);
-    }
-
-    const toast = document.createElement('div');
-    toast.className = `toast-item ${type}`;
-    toast.innerHTML = `
-      <div class="toast-badge">${badgeText || '🖤 УВЕДОМЛЕНИЕ'}</div>
-      <div class="toast-title">${title}</div>
-      <div class="toast-desc">${desc}</div>
-    `;
-
-    this.dom.toastContainer.appendChild(toast);
-    setTimeout(() => {
-      toast.classList.add('fade-out');
-      setTimeout(() => {
-        if (toast.parentNode) toast.parentNode.removeChild(toast);
-      }, 400);
-    }, 3800);
+    // Disabled as requested: no bottom-right toasts cluttering screen or blocking shop
+    return;
   }
 
   /**
@@ -2246,6 +2227,59 @@ class AltushkaGame {
   }
 
   /**
+   * Fast Auto-Clicker Turbo Mode (Item 4)
+   * Runs high-speed taps until Rebirth is available, then automatically stops and signals player.
+   */
+  startAutoClicker(speedMs = 30) {
+    if (this.autoClickerInterval) return;
+    this.isAutoClicking = true;
+    if (this.dom.btnTurboClicker) {
+      this.dom.btnTurboClicker.classList.add('active');
+      const label = this.dom.btnTurboClicker.querySelector('.btn-label');
+      if (label) label.textContent = 'Тапает...';
+    }
+
+    this.autoClickerInterval = setInterval(() => {
+      const cur = this.getCurrentEra();
+      const clicksNeeded = cur.clicksNeeded;
+
+      // Stop condition: Target clicks reached for rebirth or max level
+      if (this.rebirthClicks >= clicksNeeded || this.rebirthLevel >= this.eras.length - 1) {
+        this.stopAutoClicker();
+        if (this.dom.btnRebirth) {
+          this.dom.btnRebirth.classList.add('ready');
+        }
+        if (window.audioEngine) window.audioEngine.playAchievement();
+        console.log(`[AutoClicker] Rebirth ready! (${this.rebirthClicks}/${clicksNeeded} clicks). Auto-clicker paused.`);
+        return;
+      }
+
+      this.handleClick(null);
+    }, speedMs);
+  }
+
+  stopAutoClicker() {
+    if (this.autoClickerInterval) {
+      clearInterval(this.autoClickerInterval);
+      this.autoClickerInterval = null;
+    }
+    this.isAutoClicking = false;
+    if (this.dom.btnTurboClicker) {
+      this.dom.btnTurboClicker.classList.remove('active');
+      const label = this.dom.btnTurboClicker.querySelector('.btn-label');
+      if (label) label.textContent = 'Авто-тап';
+    }
+  }
+
+  toggleAutoClicker() {
+    if (this.isAutoClicking) {
+      this.stopAutoClicker();
+    } else {
+      this.startAutoClicker(28);
+    }
+  }
+
+  /**
    * Event Listeners
    */
   setupEventListeners() {
@@ -2253,6 +2287,9 @@ class AltushkaGame {
       const el = typeof idOrEl === 'string' ? document.getElementById(idOrEl) : idOrEl;
       if (el) el.addEventListener('click', handler);
     };
+
+    // Fast Auto-Clicker Turbo Button (Item 4)
+    attachClick(this.dom.btnTurboClicker, () => this.toggleAutoClicker());
 
     // 4.2.10 Start Menu Controls
     attachClick(this.dom.btnStartGame, () => this.startGame());
@@ -2498,4 +2535,6 @@ class AltushkaGame {
 // Launch Game on Window Load
 window.addEventListener('DOMContentLoaded', () => {
   window.altushkaGame = new AltushkaGame();
+  window.startAutoClicker = (speed) => window.altushkaGame && window.altushkaGame.startAutoClicker(speed);
+  window.stopAutoClicker = () => window.altushkaGame && window.altushkaGame.stopAutoClicker();
 });

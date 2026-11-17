@@ -692,41 +692,60 @@ body::after {
 .floating-num {
   position: absolute;
   font-family: var(--font-display);
-  font-weight: 900;
-  font-size: 1.5rem;
-  color: #fff;
-  text-shadow:
-    0 0 10px var(--neon-cyan),
-    0 0 20px var(--neon-cyan),
-    0 0 30px #000;
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: rgba(255, 255, 255, 0.85);
+  text-shadow: 0 0 6px rgba(0, 240, 255, 0.5), 0 2px 4px rgba(0, 0, 0, 0.9);
   pointer-events: none;
+  user-select: none;
   transform: translate(-50%, -50%);
-  animation: float-up-fade 0.85s cubic-bezier(0.15, 0.8, 0.25, 1) forwards;
+  animation: float-up-fade 0.55s cubic-bezier(0.15, 0.8, 0.25, 1) forwards;
+  z-index: 10;
+  white-space: nowrap;
 }
 
 .floating-num.crit {
-  font-size: 2.2rem;
-  color: var(--neon-yellow);
-  text-shadow:
-    0 0 15px var(--neon-yellow),
-    0 0 30px var(--neon-pink),
-    0 0 45px #000;
-  z-index: 15;
+  font-size: 1.08rem;
+  font-weight: 800;
+  color: #fde047;
+  text-shadow: 0 0 8px rgba(253, 224, 71, 0.7), 0 2px 6px rgba(0, 0, 0, 0.9);
+  z-index: 12;
 }
 
 @keyframes float-up-fade {
   0% {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(0.6) rotate(var(--rot, 0deg));
+    opacity: 0.9;
+    transform: translate(-50%, 0) scale(0.9);
   }
   30% {
     opacity: 1;
-    transform: translate(-50%, -100%) scale(1.25) rotate(var(--rot, 0deg));
+    transform: translate(-50%, -12px) scale(1.05);
   }
   100% {
     opacity: 0;
-    transform: translate(-50%, -180%) scale(1) rotate(var(--rot, 0deg));
+    transform: translate(-50%, -32px) scale(0.9);
   }
+}
+
+/* Turbo Auto-Clicker Button */
+.turbo-btn {
+  border-color: rgba(245, 158, 11, 0.5) !important;
+  background: rgba(245, 158, 11, 0.12) !important;
+}
+
+.turbo-btn:hover {
+  border-color: #f59e0b !important;
+  background: rgba(245, 158, 11, 0.25) !important;
+  box-shadow: 0 0 14px rgba(245, 158, 11, 0.45);
+}
+
+.turbo-btn.active {
+  background: linear-gradient(135deg, #f59e0b, #d97706) !important;
+  color: #000 !important;
+  border-color: #fbbf24 !important;
+  font-weight: 800;
+  box-shadow: 0 0 18px rgba(251, 191, 36, 0.7);
+  animation: logo-pulse 0.8s infinite alternate;
 }
 
 /* Active Buffs Pill (Item 3: Beside/under the clicker) */
@@ -1234,14 +1253,7 @@ body::after {
    ========================================================================== */
 
 .toast-container {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  z-index: 9999;
-  pointer-events: none;
+  display: none !important;
 }
 
 .toast {
@@ -2130,29 +2142,38 @@ body.theme-stage-5 {
   z-index: 2;
 }
 
-/* Speech Bubble */
+/* Speech Bubble Container (Outside Card so it NEVER covers Altushka's face or body) */
+.altushka-speech-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  max-width: 520px;
+  margin: 4px auto 6px auto;
+  min-height: 42px;
+  z-index: 10;
+  pointer-events: none;
+}
+
 .altushka-speech-bubble {
-  position: absolute;
-  top: 14px;
-  left: 50%;
-  transform: translateX(-50%);
+  position: relative;
   background: rgba(18, 14, 30, 0.95);
-  border: 2px solid #c084fc;
-  border-radius: 14px;
-  padding: 6px 14px;
+  border: 1.5px solid #c084fc;
+  border-radius: 12px;
+  padding: 6px 16px;
   display: flex;
   align-items: center;
   gap: 8px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.8), 0 0 15px rgba(192, 132, 252, 0.4);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.7), 0 0 12px rgba(192, 132, 252, 0.35);
   z-index: 10;
   pointer-events: none;
-  max-width: 90%;
+  max-width: 95%;
   transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.2s ease;
   white-space: nowrap;
 }
 
 .altushka-speech-bubble.bubble-bounce {
-  transform: translateX(-50%) scale(1.08);
+  transform: scale(1.06);
 }
 
 .speech-text {
@@ -2169,14 +2190,14 @@ body.theme-stage-5 {
 
 .speech-tail {
   position: absolute;
-  bottom: -7px;
+  bottom: -6px;
   left: 50%;
   transform: translateX(-50%);
   width: 0;
   height: 0;
-  border-left: 7px solid transparent;
-  border-right: 7px solid transparent;
-  border-top: 7px solid #c084fc;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid #c084fc;
 }
 
 /* Sprite & Bounce Animation */
