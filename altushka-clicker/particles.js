@@ -48,9 +48,13 @@ class AltushkaParticleEngine {
   resize() {
     this.width = window.innerWidth;
     this.height = window.innerHeight;
-    if (this.canvas) {
-      this.canvas.width = this.width;
-      this.canvas.height = this.height;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    if (this.canvas && this.ctx) {
+      this.canvas.width = Math.floor(this.width * dpr);
+      this.canvas.height = Math.floor(this.height * dpr);
+      this.canvas.style.width = `${this.width}px`;
+      this.canvas.style.height = `${this.height}px`;
+      this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
   }
 

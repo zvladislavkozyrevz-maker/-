@@ -180,13 +180,16 @@ body::after {
   align-items: center;
   justify-content: space-between;
   padding: 12px 20px;
-  background: var(--bg-card);
+  background: rgba(16, 18, 36, 0.94);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--border-neon);
   border-radius: var(--radius-lg);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
   margin-bottom: 20px;
+  position: sticky;
+  top: 10px;
+  z-index: 100;
 }
 
 .logo-group {

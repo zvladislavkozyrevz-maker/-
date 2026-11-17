@@ -67,6 +67,7 @@ class AltushkaGame {
     this.vkStorageCallCount = 0;
     this.vkStorageHourStart = Date.now();
     this.lastVkCloudSaveTime = 0;
+    this.cloudSyncReady = false; // Guard to prevent race overwriting cloud data on boot
 
     // Mobile touch guard & tap throttling (Item 11)
     this.lastTouchTimestamp = 0;
@@ -817,12 +818,18 @@ class AltushkaGame {
     return u ? u.level : 0;
   }
 
+  sanitizeNum(v, def = 0) {
+    const n = Number(v);
+    return (isNaN(n) || !isFinite(n) || n < 0) ? def : n;
+  }
+
   getCurrentEra() {
-    return this.eras[Math.min(this.rebirthLevel, this.eras.length - 1)];
+    const idx = Math.max(0, Math.min(this.eras.length - 1, Math.floor(this.sanitizeNum(this.rebirthLevel, 0))));
+    return this.eras[idx];
   }
 
   getNextEra() {
-    const nextIdx = Math.min(this.rebirthLevel + 1, this.eras.length - 1);
+    const nextIdx = Math.max(0, Math.min(this.eras.length - 1, Math.floor(this.sanitizeNum(this.rebirthLevel, 0)) + 1));
     return this.eras[nextIdx];
   }
 
@@ -992,6 +999,12 @@ class AltushkaGame {
    * Triggers a Random Meme Dilemma / Event Modal
    */
   triggerRandomEvent(specificEvent = null) {
+    // Prevent event modal from interrupting or stacking on top of open modals (Stats, Evolution, Settings, etc.)
+    const anyModalOpen = document.querySelector('.modal-overlay:not(.hidden)');
+    if (anyModalOpen) {
+      return;
+    }
+
     const event = specificEvent || this.eventsCatalog[Math.floor(Math.random() * this.eventsCatalog.length)];
     this.currentPendingEvent = event;
 
@@ -1001,7 +1014,7 @@ class AltushkaGame {
     if (this.dom.eventHeadline) this.dom.eventHeadline.textContent = event.title;
     if (this.dom.eventStory) this.dom.eventStory.textContent = event.story;
 
-    const choiceContainer = document.getElementById('choice-container');
+    const choiceContainer = document.getElementById('event-choices-grid') || document.getElementById('choice-container');
     const hasChoices = !!(event.choiceA && event.choiceB);
 
     if (hasChoices) {
@@ -1202,7 +1215,14 @@ class AltushkaGame {
       if (b.critChance) chance += b.count * b.critChance;
     }
     chance += this.getRebirthUpgradeLvl('hyper_crit') * 0.03;
-    return Math.min(0.75, chance);
+
+    for (const buff of this.activeBuffs) {
+      if (buff.type === 'crit') {
+        chance += (buff.multiplier - 1) * 0.15;
+      }
+    }
+
+    return Math.min(0.75, Math.max(0, chance));
   }
 
   getCritMultiplier() {
@@ -1282,7 +1302,11 @@ class AltushkaGame {
     const clicksForThisTap = this.feverActive ? 2 : (isCrit ? 3 : 1);
     this.rebirthClicks += clicksForThisTap;
 
-    this.combo = Math.min(this.maxCombo, this.combo + 4.5);
+    let comboGain = 4.5;
+    for (const buff of this.activeBuffs) {
+      if (buff.type === 'combo') comboGain *= buff.multiplier;
+    }
+    this.combo = Math.min(this.maxCombo, this.combo + comboGain);
 
     if (window.audioEngine) {
       window.audioEngine.playClick(comboMult, isCrit);
@@ -1351,16 +1375,19 @@ class AltushkaGame {
     const dt = (now - this.lastTickTime) / 1000;
     this.lastTickTime = now;
 
+    // Symmetrical Delta Time handling (capped to 180s background catchup to prevent runaway loops)
+    const effectiveDt = Math.min(Math.max(0, dt), 180);
+
     // 4.2.7 Track active playtime in seconds
-    if (dt > 0 && dt < 2) {
-      this.sessionPlayTimeSec += dt;
-      this.totalPlayTimeSec += dt;
+    if (effectiveDt > 0) {
+      this.sessionPlayTimeSec += effectiveDt;
+      this.totalPlayTimeSec += effectiveDt;
     }
 
     // 1. Passive Alt-coins Income
     const vps = this.calculateVps();
-    if (vps > 0 && dt > 0 && dt < 2) {
-      const gain = vps * dt;
+    if (vps > 0 && effectiveDt > 0) {
+      const gain = vps * effectiveDt;
       this.score += gain;
       this.totalScoreEarned += gain;
     }
@@ -1368,7 +1395,7 @@ class AltushkaGame {
     // 2. Auto-Tapper Perk
     const autoTapLevel = this.getRebirthUpgradeLvl('auto_tapper');
     if (autoTapLevel > 0) {
-      this.autoTapTimer += dt;
+      this.autoTapTimer += effectiveDt;
       const interval = 1 / (autoTapLevel * 2);
       if (this.autoTapTimer >= interval) {
         this.autoTapTimer = 0;
@@ -1378,7 +1405,7 @@ class AltushkaGame {
 
     // 3. Active Buffs Countdown
     for (let i = this.activeBuffs.length - 1; i >= 0; i--) {
-      this.activeBuffs[i].duration -= dt;
+      this.activeBuffs[i].duration -= effectiveDt;
       if (this.activeBuffs[i].duration <= 0) {
         this.activeBuffs.splice(i, 1);
         this.renderActiveBuffs();
@@ -1387,7 +1414,7 @@ class AltushkaGame {
 
     // 4. Combo & Fever logic
     if (this.feverActive) {
-      this.feverTimer -= dt;
+      this.feverTimer -= effectiveDt;
       this.combo = (this.feverTimer / 8) * this.maxCombo;
       if (this.feverTimer <= 0) {
         this.feverActive = false;
@@ -1403,8 +1430,13 @@ class AltushkaGame {
         this.showToast('🔥 ХАЙП-РАЗГОН АКТИВЕН!', 'Множитель тапа x3.5 на 8 секунд!', 'fever-toast', 'ХАЙП 🔥');
         this.triggerSpeechQuote("ВОТ ЭТО ДВИЖ! МУЗЫКУ НА ВСЮ ГРОМКОСТЬ!");
       } else if (this.combo > 0) {
-        this.combo = Math.max(0, this.combo - this.comboDecayRate * dt);
+        this.combo = Math.max(0, this.combo - this.comboDecayRate * effectiveDt);
       }
+    }
+
+    // Periodic achievement check for idle playtime milestones
+    if (Math.random() < 0.008) {
+      this.checkAchievements();
     }
 
     this.updateUI();
@@ -1434,11 +1466,17 @@ class AltushkaGame {
     }
 
     // Rebirth / Evolution progress
-    const reqClicks = this.getClicksNeededForRebirth();
-    const ready = this.rebirthClicks >= reqClicks;
+    const isMaxStage = this.rebirthLevel >= this.eras.length - 1;
     if (this.dom.rebirthPill) {
-      this.dom.rebirthPill.textContent = `${Math.min(reqClicks, this.rebirthClicks)}/${reqClicks} 👆`;
-      this.dom.rebirthPill.classList.toggle('ready', ready);
+      if (isMaxStage) {
+        this.dom.rebirthPill.textContent = `МАКС. УРОВЕНЬ 👑`;
+        this.dom.rebirthPill.classList.remove('ready');
+      } else {
+        const reqClicks = this.getClicksNeededForRebirth();
+        const ready = this.rebirthClicks >= reqClicks;
+        this.dom.rebirthPill.textContent = `${Math.min(reqClicks, this.rebirthClicks)}/${reqClicks} 👆`;
+        this.dom.rebirthPill.classList.toggle('ready', ready);
+      }
     }
 
     if (this.dom.shardsDisplay) {
@@ -1601,25 +1639,37 @@ class AltushkaGame {
   openRebirthModal() {
     const cur = this.getCurrentEra();
     const next = this.getNextEra();
+    const isMax = this.rebirthLevel >= this.eras.length - 1;
     const clicksNeeded = cur.clicksNeeded;
 
     if (this.dom.rebirthCurAvatar) this.dom.rebirthCurAvatar.textContent = cur.avatar;
     if (this.dom.rebirthCurName) this.dom.rebirthCurName.textContent = cur.name;
 
-    if (this.dom.rebirthNextAvatar) this.dom.rebirthNextAvatar.textContent = next.avatar;
-    if (this.dom.rebirthNextName) this.dom.rebirthNextName.textContent = next.name;
+    if (isMax) {
+      if (this.dom.rebirthNextAvatar) this.dom.rebirthNextAvatar.textContent = '👑';
+      if (this.dom.rebirthNextName) this.dom.rebirthNextName.textContent = 'МАКСИМАЛЬНЫЙ УРОВЕНЬ';
+      if (this.dom.rebirthEraQuote) this.dom.rebirthEraQuote.textContent = '«Абсолютная королева рейва! Все 5 стилей альтушки открыты и прокачаны!»';
+      if (this.dom.rebirthClicksNum) this.dom.rebirthClicksNum.textContent = 'МАКСИМУМ (15,000 / 15,000)';
+      if (this.dom.rebirthBarFill) this.dom.rebirthBarFill.style.width = '100%';
+      if (this.dom.rebirthShardsReward) this.dom.rebirthShardsReward.textContent = '0';
+      if (this.dom.btnDoRebirth) {
+        this.dom.btnDoRebirth.textContent = '👑 ЭВОЛЮЦИЯ ЗАВЕРШЕНА!';
+        this.dom.btnDoRebirth.classList.add('disabled');
+      }
+    } else {
+      if (this.dom.rebirthNextAvatar) this.dom.rebirthNextAvatar.textContent = next.avatar;
+      if (this.dom.rebirthNextName) this.dom.rebirthNextName.textContent = next.name;
+      if (this.dom.rebirthEraQuote) this.dom.rebirthEraQuote.textContent = next.quote;
+      if (this.dom.rebirthClicksNum) this.dom.rebirthClicksNum.textContent = `${Math.min(clicksNeeded, this.rebirthClicks)} / ${clicksNeeded}`;
+      const fillPct = Math.min(100, (this.rebirthClicks / clicksNeeded) * 100);
+      if (this.dom.rebirthBarFill) this.dom.rebirthBarFill.style.width = `${fillPct}%`;
+      if (this.dom.rebirthShardsReward) this.dom.rebirthShardsReward.textContent = cur.shardsReward;
 
-    if (this.dom.rebirthEraQuote) this.dom.rebirthEraQuote.textContent = next.quote;
-    if (this.dom.rebirthClicksNum) this.dom.rebirthClicksNum.textContent = `${Math.min(clicksNeeded, this.rebirthClicks)} / ${clicksNeeded}`;
-
-    const fillPct = Math.min(100, (this.rebirthClicks / clicksNeeded) * 100);
-    if (this.dom.rebirthBarFill) this.dom.rebirthBarFill.style.width = `${fillPct}%`;
-
-    if (this.dom.rebirthShardsReward) this.dom.rebirthShardsReward.textContent = cur.shardsReward;
-
-    const canRebirth = this.rebirthClicks >= clicksNeeded && this.rebirthLevel < this.eras.length - 1;
-    if (this.dom.btnDoRebirth) {
-      this.dom.btnDoRebirth.classList.toggle('disabled', !canRebirth);
+      const canRebirth = this.rebirthClicks >= clicksNeeded;
+      if (this.dom.btnDoRebirth) {
+        this.dom.btnDoRebirth.textContent = 'СОВЕРШИТЬ ЭВОЛЮЦИЮ! 🖤';
+        this.dom.btnDoRebirth.classList.toggle('disabled', !canRebirth);
+      }
     }
 
     if (this.dom.modalRebirth) this.dom.modalRebirth.classList.remove('hidden');
@@ -1868,60 +1918,67 @@ class AltushkaGame {
   }
 
   applySerializedState(data) {
-    if (!data) return;
-    this.score = data.score ?? 0;
-    this.totalScoreEarned = data.totalScoreEarned ?? 0;
-    this.totalClicks = data.totalClicks ?? 0;
-    this.totalBonuses = data.totalBonuses ?? 0;
-    this.rebirthLevel = data.rebirthLevel ?? 0;
-    this.rebirthClicks = data.rebirthClicks ?? 0;
-    this.neuroShards = data.neuroShards ?? 0;
-    this.totalShardsEarned = data.totalShardsEarned ?? 0;
-    this.totalPlayTimeSec = data.totalPlayTimeSec ?? 0;
+    if (!data || typeof data !== 'object') return;
+    this.score = this.sanitizeNum(data.score, 0);
+    this.totalScoreEarned = this.sanitizeNum(data.totalScoreEarned, this.score);
+    this.totalClicks = this.sanitizeNum(data.totalClicks, 0);
+    this.totalBonuses = this.sanitizeNum(data.totalBonuses, 0);
+    this.rebirthLevel = Math.max(0, Math.min(this.eras.length - 1, Math.floor(this.sanitizeNum(data.rebirthLevel, 0))));
+    this.rebirthClicks = this.sanitizeNum(data.rebirthClicks, 0);
+    this.neuroShards = this.sanitizeNum(data.neuroShards, 0);
+    this.totalShardsEarned = this.sanitizeNum(data.totalShardsEarned, this.neuroShards);
+    this.totalPlayTimeSec = this.sanitizeNum(data.totalPlayTimeSec, 0);
 
-    if (data.producers) {
+    if (Array.isArray(data.producers)) {
       data.producers.forEach(sp => {
+        if (!sp || typeof sp.id !== 'string') return;
         const p = this.producers.find(x => x.id === sp.id);
-        if (p) p.count = sp.count;
+        if (p) p.count = Math.floor(this.sanitizeNum(sp.count, 0));
       });
     }
 
-    if (data.boosters) {
+    if (Array.isArray(data.boosters)) {
       data.boosters.forEach(sb => {
+        if (!sb || typeof sb.id !== 'string') return;
         const b = this.boosters.find(x => x.id === sb.id);
-        if (b) b.count = sb.count;
+        if (b) b.count = Math.min(b.maxCount, Math.floor(this.sanitizeNum(sb.count, 0)));
       });
     }
 
-    if (data.rebirthUpgrades) {
+    if (Array.isArray(data.rebirthUpgrades)) {
       data.rebirthUpgrades.forEach(su => {
+        if (!su || typeof su.id !== 'string') return;
         const u = this.rebirthUpgrades.find(x => x.id === su.id);
-        if (u) u.level = su.level;
+        if (u) u.level = u.maxLevel ? Math.min(u.maxLevel, Math.floor(this.sanitizeNum(su.level, 0))) : Math.floor(this.sanitizeNum(su.level, 0));
       });
     }
 
-    if (data.achievements) {
+    if (Array.isArray(data.achievements)) {
       data.achievements.forEach(sa => {
+        if (!sa || typeof sa.id !== 'string') return;
         const a = this.achievements.find(x => x.id === sa.id);
         if (a) {
-          a.unlocked = sa.unlocked;
-          a.claimed = sa.claimed ?? sa.unlocked;
+          a.unlocked = !!sa.unlocked;
+          a.claimed = !!(sa.claimed ?? sa.unlocked);
         }
       });
     }
 
-    // Offline Progress Calculation
-    if (data.lastSaveTime) {
-      const diffSec = Math.floor((Date.now() - data.lastSaveTime) / 1000);
-      if (diffSec > 15) {
+    // Offline Progress Calculation (Capped to max 24 hours = 86400s)
+    if (data.lastSaveTime && typeof data.lastSaveTime === 'number') {
+      const now = Date.now();
+      const diffSec = Math.floor((now - data.lastSaveTime) / 1000);
+      if (diffSec > 15 && diffSec < 86400 * 30) {
         const vps = this.calculateVps();
         const offlineEarned = Math.floor(vps * Math.min(diffSec, 86400) * 0.7);
         if (offlineEarned > 0) {
           this.offlinePendingReward = offlineEarned;
           setTimeout(() => {
             if (this.dom.modalOffline) {
-              document.getElementById('offline-time').textContent = `${Math.floor(diffSec / 60)} мин`;
-              document.getElementById('offline-earned').textContent = `+${formatNumber(offlineEarned)}`;
+              const timeEl = document.getElementById('offline-time');
+              const earnEl = document.getElementById('offline-earned');
+              if (timeEl) timeEl.textContent = `${Math.floor(diffSec / 60)} мин`;
+              if (earnEl) earnEl.textContent = `+${formatNumber(offlineEarned)}`;
               this.dom.modalOffline.classList.remove('hidden');
             }
           }, 600);
@@ -1957,8 +2014,12 @@ class AltushkaGame {
    */
   syncVkCloudSave() {
     if (typeof vkBridge === 'undefined' || !vkBridge.send) return;
+    if (!this.cloudSyncReady) return; // Prevent overwriting cloud data before initial pull finishes
 
     const now = Date.now();
+    // 15-second minimum throttle between manual/auto cloud saves
+    if (this.lastVkCloudSaveTime && now - this.lastVkCloudSaveTime < 15000) return;
+
     // Hourly counter reset
     if (now - this.vkStorageHourStart > 3600000) {
       this.vkStorageCallCount = 0;
@@ -1990,18 +2051,27 @@ class AltushkaGame {
   }
 
   loadFromVkCloud() {
-    if (typeof vkBridge === 'undefined' || !vkBridge.send) return;
+    if (typeof vkBridge === 'undefined' || !vkBridge.send) {
+      this.cloudSyncReady = true;
+      return;
+    }
 
     vkBridge.send('VKWebAppStorageGet', {
       keys: [this.vkCloudKey]
     }).then(res => {
+      this.cloudSyncReady = true;
       if (res && res.keys && res.keys.length > 0) {
         const item = res.keys.find(k => k.key === this.vkCloudKey);
         if (item && item.value) {
           try {
             const cloudData = JSON.parse(item.value);
-            // If cloud progress has more clicks/score, apply it
-            if (cloudData.totalClicks > this.totalClicks || cloudData.score > this.score) {
+            // Non-destructive conflict resolution: compare rebirthLevel, total clicks, and timestamp (never raw score)
+            const cloudRebirth = cloudData.rebirthLevel || 0;
+            const isCloudAhead = (cloudRebirth > this.rebirthLevel) ||
+              (cloudRebirth === this.rebirthLevel && (cloudData.totalClicks || 0) > this.totalClicks) ||
+              (cloudData.lastSaveTime && cloudData.lastSaveTime > (this.lastSaveTime || 0));
+
+            if (isCloudAhead) {
               this.applySerializedState(cloudData);
               this.updateUI();
               this.renderShop();
@@ -2016,6 +2086,7 @@ class AltushkaGame {
         }
       }
     }).catch(err => {
+      this.cloudSyncReady = true;
       console.warn('[VK Storage] Error reading cloud save', err);
     });
   }
@@ -2053,12 +2124,15 @@ class AltushkaGame {
     if (!input) return;
     try {
       const jsonStr = decodeURIComponent(escape(atob(input.trim())));
-      JSON.parse(jsonStr);
+      const parsed = JSON.parse(jsonStr);
+      if (!parsed || typeof parsed !== 'object') {
+        throw new Error('Invalid format');
+      }
       localStorage.setItem(this.saveKey, jsonStr);
       alert('Сохранение успешно загружено!');
       window.location.reload();
     } catch (e) {
-      alert('Неверный код сохранения!');
+      alert('Неверный или поврежденный код сохранения!');
     }
   }
 
@@ -2157,6 +2231,12 @@ class AltushkaGame {
     }
     const modal = typeof modalId === 'string' ? document.getElementById(modalId) : modalId;
     if (modal) {
+      if ((modal.id === 'modal-offline' || modalId === 'modal-offline') && this.offlinePendingReward > 0) {
+        // Auto-credit pending offline earnings if player dismissed via X or Escape
+        this.score += this.offlinePendingReward;
+        this.totalScoreEarned += this.offlinePendingReward;
+        this.offlinePendingReward = 0;
+      }
       modal.classList.add('hidden');
     }
   }
@@ -2268,7 +2348,7 @@ class AltushkaGame {
     // 4.2.1 Rewarded Video Boost Button
     attachClick(this.dom.btnAdBoost, () => {
       this.showRewardedAd(() => {
-        this.addBuff('ad_boost_' + Date.now(), 'Рекламный Буст (x5)', '🎬', 5, 120, 'all');
+        this.addBuff('ad_boost_reward', 'Рекламный Буст (x5)', '🎬', 5, 120, 'all');
         this.showToast('🎬 БУСТ АКТИВИРОВАН!', 'x5 множитель всего заработка на 2 минуты!', 'meme-toast', 'СУПЕР-УСКОРЕНИЕ 🚀');
         if (window.audioEngine) window.audioEngine.playBuy();
       });

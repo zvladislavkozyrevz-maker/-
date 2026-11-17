@@ -68,8 +68,16 @@ class AltushkaAudioEngine {
         this.startMusic();
       }
     } else if (this.ctx.state === 'suspended') {
-      this.ctx.resume();
+      this.ctx.resume().catch(() => {});
     }
+  }
+
+  safeDisconnect(...nodes) {
+    nodes.forEach(n => {
+      if (n && n.disconnect) {
+        try { n.disconnect(); } catch (e) {}
+      }
+    });
   }
 
   saveSettings() {
@@ -161,6 +169,7 @@ class AltushkaAudioEngine {
 
     osc.connect(gain);
     gain.connect(this.sfxGain);
+    osc.onended = () => this.safeDisconnect(osc, gain);
     osc.start(t);
     osc.stop(t + (isCrit ? 0.23 : 0.13));
   }
@@ -179,6 +188,7 @@ class AltushkaAudioEngine {
 
     osc.connect(gain);
     gain.connect(this.sfxGain);
+    osc.onended = () => this.safeDisconnect(osc, gain);
     osc.start(t);
     osc.stop(t + 0.15);
   }
@@ -211,6 +221,9 @@ class AltushkaAudioEngine {
     oscThud.connect(gainThud);
     gainThud.connect(this.sfxGain);
 
+    oscClink.onended = () => this.safeDisconnect(oscClink, gainClink);
+    oscThud.onended = () => this.safeDisconnect(oscThud, gainThud);
+
     oscClink.start(t);
     oscClink.stop(t + 0.12);
     oscThud.start(t);
@@ -236,6 +249,8 @@ class AltushkaAudioEngine {
     osc2.connect(gain);
     gain.connect(this.sfxGain);
 
+    osc1.onended = () => this.safeDisconnect(osc1, osc2, gain);
+
     osc1.start(t);
     osc2.start(t);
     osc1.stop(t + (isCrit ? 0.26 : 0.17));
@@ -256,6 +271,7 @@ class AltushkaAudioEngine {
 
     osc.connect(gain);
     gain.connect(this.sfxGain);
+    osc.onended = () => this.safeDisconnect(osc, gain);
     osc.start(t);
     osc.stop(t + (isCrit ? 0.39 : 0.25));
   }
@@ -276,6 +292,7 @@ class AltushkaAudioEngine {
 
     osc.connect(gain);
     gain.connect(this.sfxGain);
+    osc.onended = () => this.safeDisconnect(osc, gain);
     osc.start(t);
     osc.stop(t + 0.08);
   }
@@ -294,6 +311,7 @@ class AltushkaAudioEngine {
       gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.05 + 0.1);
       osc.connect(gain);
       gain.connect(this.sfxGain);
+      osc.onended = () => this.safeDisconnect(osc, gain);
       osc.start(t + i * 0.05);
       osc.stop(t + i * 0.05 + 0.11);
     });
@@ -313,6 +331,7 @@ class AltushkaAudioEngine {
       gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.07 + 0.12);
       osc.connect(gain);
       gain.connect(this.sfxGain);
+      osc.onended = () => this.safeDisconnect(osc, gain);
       osc.start(t + i * 0.07);
       osc.stop(t + i * 0.07 + 0.13);
     });
@@ -333,6 +352,7 @@ class AltushkaAudioEngine {
       gain.gain.exponentialRampToValueAtTime(0.001, t + idx * 0.07 + 0.35);
       osc.connect(gain);
       gain.connect(this.sfxGain);
+      osc.onended = () => this.safeDisconnect(osc, gain);
       osc.start(t + idx * 0.07);
       osc.stop(t + idx * 0.07 + 0.36);
     });
@@ -352,6 +372,7 @@ class AltushkaAudioEngine {
       gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.08 + 0.22);
       osc.connect(gain);
       gain.connect(this.sfxGain);
+      osc.onended = () => this.safeDisconnect(osc, gain);
       osc.start(t + i * 0.08);
       osc.stop(t + i * 0.08 + 0.23);
     });
@@ -373,6 +394,7 @@ class AltushkaAudioEngine {
 
     osc.connect(gain);
     gain.connect(this.sfxGain);
+    osc.onended = () => this.safeDisconnect(osc, gain);
     osc.start(t);
     osc.stop(t + 0.41);
   }
@@ -448,6 +470,8 @@ class AltushkaAudioEngine {
     filter.connect(gain);
     gain.connect(this.musicGain);
 
+    osc.onended = () => this.safeDisconnect(osc, filter, gain);
+
     osc.start(t);
     osc.stop(t + 0.66);
   }
@@ -471,6 +495,8 @@ class AltushkaAudioEngine {
     osc.connect(filter);
     filter.connect(gain);
     gain.connect(this.musicGain);
+
+    osc.onended = () => this.safeDisconnect(osc, filter, gain);
 
     osc.start(t);
     osc.stop(t + 1.85);
