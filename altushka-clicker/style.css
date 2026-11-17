@@ -1064,6 +1064,7 @@ body::after {
   font-weight: 800;
   box-shadow: 0 0 10px rgba(0, 240, 255, 0.25);
   transition: var(--transition);
+  pointer-events: none;
 }
 
 .shop-item-card:hover:not(.disabled) .item-cost-btn {

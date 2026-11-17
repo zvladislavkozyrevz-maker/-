@@ -1506,16 +1506,12 @@ class AltushkaGame {
           </div>
         `;
 
-        const btnBuy = card.querySelector('.item-cost-btn');
-        if (btnBuy) {
-          btnBuy.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const now = Date.now();
-            if (this.lastBuyTime && now - this.lastBuyTime < 90) return;
-            this.lastBuyTime = now;
-            this.buyProducer(prod.id);
-          });
-        }
+        card.addEventListener('click', () => {
+          const now = Date.now();
+          if (this.lastBuyTime && now - this.lastBuyTime < 90) return;
+          this.lastBuyTime = now;
+          this.buyProducer(prod.id);
+        });
 
         this.dom.producersList.appendChild(card);
       });
@@ -1553,10 +1549,8 @@ class AltushkaGame {
           </div>
         `;
 
-        const btnBuy = card.querySelector('.item-cost-btn');
-        if (btnBuy && !maxed) {
-          btnBuy.addEventListener('click', (e) => {
-            e.stopPropagation();
+        if (!maxed) {
+          card.addEventListener('click', () => {
             const now = Date.now();
             if (this.lastBuyTime && now - this.lastBuyTime < 90) return;
             this.lastBuyTime = now;
@@ -1794,7 +1788,6 @@ class AltushkaGame {
     this.renderAchievements();
     this.updateUI();
     this.showAchievementBanner(ach, rewardText);
-    this.showToast(`🏆 ДОСТИЖЕНИЕ: ${ach.title}`, `${ach.desc} ${rewardText}`, 'achievement-toast', ach.memeTag);
     if (window.audioEngine) window.audioEngine.playAchievement();
   }
 
