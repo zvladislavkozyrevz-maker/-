@@ -920,7 +920,8 @@ body::after {
   overflow-y: auto;
   max-height: 540px;
   padding-right: 6px;
-  padding-bottom: 4px;
+  padding-bottom: 50px;
+  scroll-padding-bottom: 30px;
 }
 
 /* Custom Scrollbar */
@@ -1749,7 +1750,7 @@ body::after {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 2000;
   padding: 16px;
   transition: opacity 0.2s ease;
 }

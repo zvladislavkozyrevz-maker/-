@@ -73,6 +73,7 @@ class AltushkaGame {
     this.lastTouchTimestamp = 0;
     this.lastTapTimestamp = 0;
     this.lastBuyTime = 0;
+    this.isResetting = false;
 
     // Single-instance Lucky Bonus state (Item 3)
     this.luckyActive = false;
@@ -901,6 +902,7 @@ class AltushkaGame {
     if (this.dom.startMenuScreen) {
       this.dom.startMenuScreen.classList.add('hidden');
     }
+    this.closeAllModals();
     if (window.audioEngine) {
       window.audioEngine.init();
     }
@@ -1972,6 +1974,7 @@ class AltushkaGame {
   }
 
   saveGame() {
+    if (this.isResetting) return;
     try {
       const jsonStr = this.getSerializedState();
       localStorage.setItem(this.saveKey, jsonStr);
@@ -1997,6 +2000,7 @@ class AltushkaGame {
    * - Max 1000 variables (we use exactly 1 key)
    */
   syncVkCloudSave() {
+    if (this.isResetting) return;
     if (typeof vkBridge === 'undefined' || !vkBridge.send) return;
     if (!this.cloudSyncReady) return; // Prevent overwriting cloud data before initial pull finishes
 
@@ -2035,6 +2039,12 @@ class AltushkaGame {
   }
 
   loadFromVkCloud() {
+    if (sessionStorage.getItem('altushka_just_reset') === '1') {
+      sessionStorage.removeItem('altushka_just_reset');
+      this.cloudSyncReady = true;
+      console.log('[VK Storage] Reset active, skipping cloud restore.');
+      return;
+    }
     if (typeof vkBridge === 'undefined' || !vkBridge.send) {
       this.cloudSyncReady = true;
       return;
@@ -2076,16 +2086,41 @@ class AltushkaGame {
   }
 
   resetGame() {
-    if (confirm('Точно сбросить весь прогресс Альтушка-Кликера?')) {
-      localStorage.removeItem(this.saveKey);
-      if (typeof vkBridge !== 'undefined' && vkBridge.send) {
-        vkBridge.send('VKWebAppStorageSet', {
-          key: this.vkCloudKey,
-          value: ''
-        }).catch(() => {});
-      }
-      window.location.reload();
+    if (!confirm('Точно сбросить весь прогресс Альтушка-Кликера? Начать сначала с 1 уровня?')) {
+      return;
     }
+    this.isResetting = true;
+    try {
+      localStorage.removeItem(this.saveKey);
+      localStorage.removeItem('altushka_clicker_audio');
+      sessionStorage.setItem('altushka_just_reset', '1');
+    } catch (e) {}
+
+    if (typeof vkBridge !== 'undefined' && vkBridge.send) {
+      vkBridge.send('VKWebAppStorageSet', {
+        key: this.vkCloudKey,
+        value: JSON.stringify({ isReset: true, rebirthLevel: 0, totalClicks: 0, lastSaveTime: Date.now() + 500000 })
+      }).catch(() => {});
+    }
+
+    this.score = 0;
+    this.totalScoreEarned = 0;
+    this.totalClicks = 0;
+    this.totalBonuses = 0;
+    this.rebirthLevel = 0;
+    this.rebirthClicks = 0;
+    this.neuroShards = 0;
+    this.totalShardsEarned = 0;
+    this.totalPlayTimeSec = 0;
+    this.sessionStartTime = Date.now();
+    this.producers.forEach(p => p.count = 0);
+    this.boosters.forEach(b => b.count = 0);
+    this.rebirthUpgrades.forEach(u => u.level = 0);
+    this.achievements.forEach(a => { a.unlocked = false; a.claimed = false; });
+    this.activeBuffs = [];
+    this.combo = 0;
+
+    window.location.reload();
   }
 
   exportSave() {
@@ -2304,13 +2339,12 @@ class AltushkaGame {
     attachClick('btn-tutorial', () => this.openModal('modal-tutorial'));
 
     attachClick(this.dom.btnStartStats, () => {
-      const btn = document.getElementById('btn-stats');
-      if (btn) btn.click();
+      this.renderAchievements();
+      this.openModal('modal-stats');
     });
 
     attachClick(this.dom.btnStartSettings, () => {
-      const btn = document.getElementById('btn-settings');
-      if (btn) btn.click();
+      this.openModal('modal-settings');
     });
 
     attachClick(this.dom.btnStartAudioToggle, () => {
@@ -2525,15 +2559,17 @@ class AltushkaGame {
 
     // Save on tab minimize / switch / close
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) {
+      if (document.hidden && !this.isResetting) {
         this.saveGame();
         this.syncVkCloudSave();
       }
     });
 
     window.addEventListener('beforeunload', () => {
-      this.saveGame();
-      this.syncVkCloudSave();
+      if (!this.isResetting) {
+        this.saveGame();
+        this.syncVkCloudSave();
+      }
     });
   }
 }

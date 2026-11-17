@@ -61,7 +61,7 @@ class AltushkaAudioEngine {
       this.sfxGain.connect(this.masterGain);
 
       this.musicGain = this.ctx.createGain();
-      this.musicGain.gain.setValueAtTime(this.musicEnabled ? 0.28 : 0, this.ctx.currentTime);
+      this.musicGain.gain.setValueAtTime(this.musicEnabled ? 0.55 : 0, this.ctx.currentTime);
       this.musicGain.connect(this.masterGain);
 
       if (this.musicEnabled) {
@@ -109,8 +109,14 @@ class AltushkaAudioEngine {
 
   toggleMusic() {
     this.init();
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(() => {});
+    }
     this.musicEnabled = !this.musicEnabled;
     if (this.musicEnabled) {
+      if (this.musicGain && this.ctx) {
+        this.musicGain.gain.setValueAtTime(0.55, this.ctx.currentTime);
+      }
       this.startMusic();
     } else {
       this.stopMusic();
@@ -402,51 +408,95 @@ class AltushkaAudioEngine {
   /**
    * PROCEDURAL LO-FI / DARKWAVE MELODIC AMBIENT (Chill, atmospheric, zero drone)
    */
+  /**
+   * PROCEDURAL LO-FI / DARKWAVE MELODIC AMBIENT («Альт-фон»)
+   * Lush analog pads, melodic arpeggios, and warm basslines.
+   */
   startMusic() {
     if (this.isMusicPlaying || !this.musicEnabled) return;
     this.init();
     if (!this.ctx) return;
+    if (this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(() => {});
+    }
 
     if (this.musicGain) {
-      this.musicGain.gain.setValueAtTime(0.001, this.ctx.currentTime);
-      this.musicGain.gain.linearRampToValueAtTime(0.32, this.ctx.currentTime + 1.5);
+      try {
+        this.musicGain.gain.cancelScheduledValues(this.ctx.currentTime);
+        this.musicGain.gain.setValueAtTime(0.55, this.ctx.currentTime);
+      } catch (e) {}
     }
 
     this.isMusicPlaying = true;
     this.musicStep = 0;
 
-    // Atmospheric 4-chord progression: Dm -> Bb -> F -> C
-    const chordProgression = [
-      // D minor
-      { bass: 73.42, notes: [220.00, 261.63, 293.66, 349.23, 440.00] },
-      // Bb major
-      { bass: 58.27, notes: [233.08, 293.66, 349.23, 466.16, 523.25] },
-      // F major
-      { bass: 87.31, notes: [220.00, 261.63, 349.23, 392.00, 440.00] },
-      // C major / Am
-      { bass: 65.41, notes: [196.00, 261.63, 329.63, 392.00, 493.88] }
+    // Atmospheric Alt-Wave chord progression: Dm -> Bb -> F -> C
+    const chords = [
+      { bass: 146.83, pad: [220.00, 261.63, 349.23], arps: [293.66, 349.23, 440.00, 523.25] },
+      { bass: 116.54, pad: [233.08, 293.66, 349.23], arps: [233.08, 293.66, 349.23, 466.16] },
+      { bass: 174.61, pad: [220.00, 261.63, 349.23], arps: [261.63, 349.23, 392.00, 523.25] },
+      { bass: 130.81, pad: [196.00, 261.63, 329.63], arps: [261.63, 329.63, 392.00, 493.88] }
     ];
 
-    // Sequencer step every 500ms
+    // Trigger initial warm pad immediately
+    this.playAmbientPad(chords[0].pad);
+
     this.musicTimer = setInterval(() => {
-      if (!this.isMusicPlaying || !this.ctx || this.ctx.state === 'suspended') return;
-
-      const chordIdx = Math.floor(this.musicStep / 4) % chordProgression.length;
-      const stepInChord = this.musicStep % 4;
-      const chord = chordProgression[chordIdx];
-      const t = this.ctx.currentTime;
-
-      // 1. Warm sub-bass note on beat 1 of each chord
-      if (stepInChord === 0) {
-        this.playSoftBass(chord.bass, t);
+      if (!this.isMusicPlaying || !this.ctx) return;
+      if (this.ctx.state === 'suspended') {
+        this.ctx.resume().catch(() => {});
+        return;
       }
 
-      // 2. Gentle melodic note
-      const noteFreq = chord.notes[(this.musicStep * 2 + (chordIdx % 2)) % chord.notes.length];
-      this.playSoftPluck(noteFreq, t);
+      const chordIdx = Math.floor(this.musicStep / 4) % chords.length;
+      const stepInChord = this.musicStep % 4;
+      const curChord = chords[chordIdx];
+      const t = this.ctx.currentTime;
+
+      // 1. Play continuous lush darkwave pad at start of each chord
+      if (stepInChord === 0) {
+        this.playAmbientPad(curChord.pad);
+        this.playSoftBass(curChord.bass, t);
+      } else if (stepInChord === 2) {
+        this.playSoftBass(curChord.bass * 1.5, t);
+      }
+
+      // 2. Melodic synth pluck
+      const note = curChord.arps[this.musicStep % curChord.arps.length];
+      this.playSoftPluck(note, t);
 
       this.musicStep++;
     }, 550);
+  }
+
+  playAmbientPad(notes) {
+    if (!this.ctx || !this.musicGain || !this.isMusicPlaying) return;
+    const t = this.ctx.currentTime;
+    notes.forEach((freq, idx) => {
+      const osc = this.ctx.createOscillator();
+      const filter = this.ctx.createBiquadFilter();
+      const gain = this.ctx.createGain();
+
+      osc.type = idx % 2 === 0 ? 'sawtooth' : 'triangle';
+      osc.frequency.setValueAtTime(freq, t);
+      osc.detune.setValueAtTime((idx - 1) * 8, t);
+
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(950, t);
+
+      gain.gain.setValueAtTime(0.001, t);
+      gain.gain.linearRampToValueAtTime(0.09, t + 0.35);
+      gain.gain.setValueAtTime(0.09, t + 1.8);
+      gain.gain.linearRampToValueAtTime(0.001, t + 2.3);
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.musicGain);
+
+      osc.onended = () => this.safeDisconnect(osc, filter, gain);
+      osc.start(t);
+      osc.stop(t + 2.35);
+    });
   }
 
   playSoftPluck(freq, t) {
@@ -459,12 +509,12 @@ class AltushkaAudioEngine {
     osc.frequency.setValueAtTime(freq, t);
 
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(700, t);
-    filter.frequency.exponentialRampToValueAtTime(280, t + 0.65);
+    filter.frequency.setValueAtTime(1400, t);
+    filter.frequency.exponentialRampToValueAtTime(500, t + 0.55);
 
     gain.gain.setValueAtTime(0.001, t);
-    gain.gain.linearRampToValueAtTime(0.12, t + 0.04);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.65);
+    gain.gain.linearRampToValueAtTime(0.22, t + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
 
     osc.connect(filter);
     filter.connect(gain);
@@ -473,7 +523,7 @@ class AltushkaAudioEngine {
     osc.onended = () => this.safeDisconnect(osc, filter, gain);
 
     osc.start(t);
-    osc.stop(t + 0.66);
+    osc.stop(t + 0.58);
   }
 
   playSoftBass(freq, t) {
@@ -482,15 +532,15 @@ class AltushkaAudioEngine {
     const filter = this.ctx.createBiquadFilter();
     const gain = this.ctx.createGain();
 
-    osc.type = 'sine';
+    osc.type = 'triangle';
     osc.frequency.setValueAtTime(freq, t);
 
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(180, t);
+    filter.frequency.setValueAtTime(360, t);
 
     gain.gain.setValueAtTime(0.001, t);
-    gain.gain.linearRampToValueAtTime(0.28, t + 0.08);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 1.8);
+    gain.gain.linearRampToValueAtTime(0.35, t + 0.05);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 1.6);
 
     osc.connect(filter);
     filter.connect(gain);
@@ -499,17 +549,19 @@ class AltushkaAudioEngine {
     osc.onended = () => this.safeDisconnect(osc, filter, gain);
 
     osc.start(t);
-    osc.stop(t + 1.85);
+    osc.stop(t + 1.65);
   }
 
   stopMusic() {
-    if (!this.isMusicPlaying) return;
     if (this.musicTimer) {
       clearInterval(this.musicTimer);
       this.musicTimer = null;
     }
     if (this.musicGain && this.ctx) {
-      this.musicGain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + 0.5);
+      try {
+        this.musicGain.gain.cancelScheduledValues(this.ctx.currentTime);
+        this.musicGain.gain.setValueAtTime(0.001, this.ctx.currentTime);
+      } catch (e) {}
     }
     this.isMusicPlaying = false;
   }
