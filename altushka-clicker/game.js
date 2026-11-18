@@ -790,7 +790,8 @@ class AltushkaGame {
 
       // Audio buttons in Header
       btnAudio: document.getElementById('btn-audio'),
-      btnMusic: document.getElementById('btn-music')
+      btnMusic: document.getElementById('btn-music'),
+      headerMusicStatus: document.getElementById('header-music-status')
     };
 
     this.autoTapTimer = 0;
@@ -852,6 +853,21 @@ class AltushkaGame {
     this.updateStartMenuStatus();
     this.updateUI();
 
+    // Dev / Test mode detection for auto-clicker
+    const urlParams = new URLSearchParams(window.location.search);
+    const isDev = urlParams.has('dev') || urlParams.has('test') || urlParams.has('autotap');
+    if (this.dom.btnTurboClicker) {
+      this.dom.btnTurboClicker.style.display = isDev ? 'inline-flex' : 'none';
+    }
+    window.enableAutoTap = () => {
+      if (this.dom.btnTurboClicker) this.dom.btnTurboClicker.style.display = 'inline-flex';
+      this.startAutoClicker();
+    };
+    window.disableAutoTap = () => {
+      this.stopAutoClicker();
+      if (this.dom.btnTurboClicker) this.dom.btnTurboClicker.style.display = 'none';
+    };
+
     // Start Main Game Loop
     requestAnimationFrame((t) => this.gameLoop(t));
 
@@ -894,6 +910,8 @@ class AltushkaGame {
     if (window.audioEngine) {
       if (this.dom.startAudioStatus) this.dom.startAudioStatus.textContent = window.audioEngine.sfxEnabled ? 'ВКЛ' : 'ВЫКЛ';
       if (this.dom.startMusicStatus) this.dom.startMusicStatus.textContent = window.audioEngine.musicEnabled ? 'ВКЛ' : 'ВЫКЛ';
+      if (this.dom.headerMusicStatus) this.dom.headerMusicStatus.textContent = window.audioEngine.musicEnabled ? 'ВКЛ' : 'ВЫКЛ';
+      if (this.dom.btnMusic) this.dom.btnMusic.classList.toggle('active', window.audioEngine.musicEnabled);
     }
   }
 
@@ -905,6 +923,7 @@ class AltushkaGame {
     this.closeAllModals();
     if (window.audioEngine) {
       window.audioEngine.init();
+      window.audioEngine.setLevel(this.rebirthLevel + 1);
     }
   }
 
@@ -947,7 +966,7 @@ class AltushkaGame {
   /**
    * Triggers a random speech quote in the bubble above Altushka
    */
-  triggerSpeechQuote(forcedText = null) {
+  triggerSpeechQuote(forcedText = null, withSound = false) {
     const stageIdx = Math.min(this.rebirthLevel, this.eras.length - 1);
     const quotes = this.speechQuotes[stageIdx] || this.speechQuotes[0];
     const text = forcedText || quotes[Math.floor(Math.random() * quotes.length)];
@@ -958,7 +977,7 @@ class AltushkaGame {
       void this.dom.altushkaSpeech.offsetWidth;
       this.dom.altushkaSpeech.classList.add('bubble-bounce');
 
-      if (window.audioEngine) {
+      if (withSound && window.audioEngine) {
         window.audioEngine.playSpeechPop();
       }
     }
@@ -1333,8 +1352,15 @@ class AltushkaGame {
       this.spawnFloatNumber(stageRelX, stageRelY, clickGain, isCrit);
     }
 
-    if (!isAutoTap && Math.random() < 0.12) {
-      this.triggerSpeechQuote();
+    // Rare & gentle speech quote updates (at least 20s between quotes so it never distracts or flickers)
+    if (!isAutoTap && (!this.lastClickQuoteTime || now - this.lastClickQuoteTime > 20000) && Math.random() < 0.08) {
+      this.lastClickQuoteTime = now;
+      this.triggerSpeechQuote(null, false);
+    }
+
+    // Ensure audio starts on user interaction if blocked by browser autoplay
+    if (window.audioEngine && window.audioEngine.musicEnabled && (!window.audioEngine.bgAudio || window.audioEngine.bgAudio.paused)) {
+      window.audioEngine.playStageMusic(this.rebirthLevel + 1);
     }
 
     // Throttled achievements check (every 10 clicks) to prevent lag spikes
@@ -1354,8 +1380,8 @@ class AltushkaGame {
   spawnFloatNumber(relX, relY, amount, isCrit = false) {
     if (!this.dom.floatContainer) return;
 
-    // Strict cap to 4 max floating numbers so rapid taps never clutter the screen or catch the eye aggressively
-    while (this.dom.floatContainer.children.length >= 4) {
+    // Strict cap to 3 max floating numbers so rapid taps never clutter the screen or catch the eye aggressively
+    while (this.dom.floatContainer.children.length >= 3) {
       this.dom.floatContainer.removeChild(this.dom.floatContainer.firstChild);
     }
 
@@ -1363,14 +1389,14 @@ class AltushkaGame {
     el.className = `floating-num ${isCrit ? 'crit' : ''}`;
     el.textContent = isCrit ? `✨ +${formatNumber(amount)}` : `+${formatNumber(amount)}`;
 
-    const randomOffsetX = (Math.random() - 0.5) * 28;
-    el.style.left = `${Math.max(10, relX + randomOffsetX)}px`;
-    el.style.top = `${Math.max(10, relY - 10)}px`;
+    const randomOffsetX = (Math.random() - 0.5) * 20;
+    el.style.left = `${Math.max(15, relX + randomOffsetX)}px`;
+    el.style.top = `${Math.max(15, relY - 10)}px`;
 
     this.dom.floatContainer.appendChild(el);
     setTimeout(() => {
       if (el.parentNode) el.parentNode.removeChild(el);
-    }, 550);
+    }, 420);
   }
 
   /**
@@ -2365,6 +2391,7 @@ class AltushkaGame {
         const state = window.audioEngine.toggleMusic();
         if (this.dom.btnStartMusicToggle) this.dom.btnStartMusicToggle.classList.toggle('active', state);
         if (this.dom.startMusicStatus) this.dom.startMusicStatus.textContent = state ? 'ВКЛ' : 'ВЫКЛ';
+        if (this.dom.headerMusicStatus) this.dom.headerMusicStatus.textContent = state ? 'ВКЛ' : 'ВЫКЛ';
         if (this.dom.btnMusic) this.dom.btnMusic.classList.toggle('active', state);
       }
     });
@@ -2461,6 +2488,7 @@ class AltushkaGame {
         const state = window.audioEngine.toggleMusic();
         this.dom.btnMusic.classList.toggle('active', state);
         if (this.dom.startMusicStatus) this.dom.startMusicStatus.textContent = state ? 'ВКЛ' : 'ВЫКЛ';
+        if (this.dom.headerMusicStatus) this.dom.headerMusicStatus.textContent = state ? 'ВКЛ' : 'ВЫКЛ';
       }
     });
 

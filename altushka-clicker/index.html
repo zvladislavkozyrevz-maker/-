@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@500;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=14">
+  <link rel="stylesheet" href="style.css?v=15">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🖤</text></svg>">
 
   <!-- VK Bridge SDK for VK Mini Apps (Requirement 4.2.1) -->
@@ -124,8 +124,8 @@
           <span class="rebirth-progress-pill" id="rebirth-pill">0/200 👆</span>
         </button>
 
-        <!-- Fast Auto-Clicker Turbo Button -->
-        <button id="btn-turbo-clicker" class="icon-btn turbo-btn" title="Быстрый авто-кликер до следующей эволюции">
+        <!-- Fast Auto-Clicker Turbo Button (Dev/Testing only) -->
+        <button id="btn-turbo-clicker" class="icon-btn turbo-btn" style="display: none;" title="Режим авто-клика для тестов">
           <span class="btn-icon">⚡</span>
           <span class="btn-label">Авто-тап</span>
         </button>
@@ -146,9 +146,9 @@
           <span class="btn-icon">🔊</span>
           <span class="btn-label">Звук</span>
         </button>
-        <button id="btn-music" class="icon-btn" title="Фоновый Альт-Вайб">
+        <button id="btn-music" class="icon-btn" title="Фоновая музыка">
           <span class="btn-icon">🎵</span>
-          <span class="btn-label">Альт-фон</span>
+          <span class="btn-label">Музыка: <strong id="header-music-status">ВКЛ</strong></span>
         </button>
         <!-- Tutorial trigger -->
         <button id="btn-tutorial" class="icon-btn" title="Обучение и правила игры">
@@ -574,8 +574,8 @@
   </div>
 
   <!-- Scripts with cache busters -->
-  <script src="audio.js?v=14"></script>
-  <script src="particles.js?v=14"></script>
-  <script src="game.js?v=14"></script>
+  <script src="audio.js?v=15"></script>
+  <script src="particles.js?v=15"></script>
+  <script src="game.js?v=15"></script>
 </body>
 </html>

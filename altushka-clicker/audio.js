@@ -18,17 +18,17 @@ class AltushkaAudioEngine {
     this.musicGain = null;
 
     this.sfxEnabled = true;
-    this.musicEnabled = false;
+    this.musicEnabled = true;
     this.volume = 0.7;
     this.currentLevel = 1; // 1 to 5
 
-    // High-Fidelity Soundtrack per Stage (Reflecting Altushka's Cultural Evolution)
+    // Altushka Evolution Soundtrack Lineup (Calibrated background volume)
     this.stageTracks = {
-      1: 'assets/audio/track_stage1.mp3', // Level 1: Carefree (calm, cozy, acoustic normis home)
-      2: 'assets/audio/track_stage2.mp3', // Level 2: Cool Rock (indie / pop-punk starter alt rebellion)
-      3: 'assets/audio/track_stage3.mp3', // Level 3: Organic Grunge (gritty garage rock, raw distortion)
-      4: 'assets/audio/track_stage4.mp3', // Level 4: Equatorial Complex (darkwave / witch-house drain)
-      5: 'assets/audio/track_stage5.mp3'  // Level 5: Cut Trance (explosive club rave, pumping trance)
+      1: { src: 'assets/audio/track_stage1.mp3', title: 'Спокойная мелодия (Серая мышка)', mult: 0.32 },
+      2: { src: 'assets/audio/track_stage2.mp3', title: 'cupsize — по барабану', mult: 0.22 },
+      3: { src: 'assets/audio/track_stage3.mp3', title: '9mice — narcotic', mult: 0.20 },
+      4: { src: 'assets/audio/track_stage4.mp3', title: 'kai angel — mulholland', mult: 0.22 },
+      5: { src: 'assets/audio/track_stage5.mp3', title: 'kai angel — babylon', mult: 0.20 }
     };
     this.bgAudio = null;
     this.isMusicPlaying = false;
@@ -40,12 +40,22 @@ class AltushkaAudioEngine {
       if (savedSettings) {
         const parsed = JSON.parse(savedSettings);
         this.sfxEnabled = parsed.sfxEnabled ?? true;
-        this.musicEnabled = parsed.musicEnabled ?? false;
+        this.musicEnabled = parsed.musicEnabled ?? true;
         this.volume = parsed.volume ?? 0.7;
       }
     } catch (e) {
       console.warn('Audio settings read error', e);
     }
+  }
+
+  getTrackVolume(level = this.currentLevel) {
+    const t = this.stageTracks[level] || this.stageTracks[1];
+    return Math.max(0, Math.min(1, this.volume * (t.mult || 0.22)));
+  }
+
+  getCurrentTrackTitle() {
+    const t = this.stageTracks[this.currentLevel] || this.stageTracks[1];
+    return t.title || '';
   }
 
   setLevel(lvl) {
@@ -103,7 +113,7 @@ class AltushkaAudioEngine {
       this.masterGain.gain.setValueAtTime(this.volume, this.ctx.currentTime);
     }
     if (this.bgAudio) {
-      this.bgAudio.volume = Math.max(0, Math.min(1, this.volume * 0.75));
+      this.bgAudio.volume = this.getTrackVolume(this.currentLevel);
     }
     this.saveSettings();
   }
@@ -414,40 +424,58 @@ class AltushkaAudioEngine {
 
   /**
    * HIGH-FIDELITY STAGE SOUNDTRACK SYSTEM
-   * Plays unique, tailored music tracks for each evolution level:
-   * Level 1: Carefree (calm, cozy, acoustic normis home)
-   * Level 2: Cool Rock (indie / pop-punk starter alt rebellion)
-   * Level 3: Organic Grunge (gritty garage rock, raw distortion)
-   * Level 4: Equatorial Complex (darkwave / witch-house drain)
-   * Level 5: Cut Trance (explosive club rave, pumping trance)
+   * 1: Спокойная гитара / мелодия (Серая мышка)
+   * 2: cupsize — по барабану
+   * 3: 9mice — narcotic
+   * 4: kai angel — mulholland
+   * 5: kai angel — babylon
+   * Громкость сбалансирована под фон, чтобы не заглушать тапы и эффекты.
    */
   playStageMusic(level = this.currentLevel) {
     if (!this.musicEnabled) return;
-    const trackSrc = this.stageTracks[level] || this.stageTracks[1];
+    const trackInfo = this.stageTracks[level] || this.stageTracks[1];
+    const trackSrc = trackInfo.src;
 
     if (this.bgAudio && this.bgAudio.getAttribute('data-level') == level && !this.bgAudio.paused) {
       return;
     }
 
-    if (this.bgAudio) {
+    const oldAudio = this.bgAudio;
+    if (oldAudio) {
+      // Fade out old track smoothly over 250ms
       try {
-        this.bgAudio.pause();
-        this.bgAudio = null;
-      } catch (e) {}
+        const fadeStep = oldAudio.volume / 10;
+        let stepCount = 0;
+        const fadeInterval = setInterval(() => {
+          stepCount++;
+          if (oldAudio.volume > fadeStep) {
+            oldAudio.volume = Math.max(0, oldAudio.volume - fadeStep);
+          }
+          if (stepCount >= 10 || oldAudio.volume <= 0.01) {
+            clearInterval(fadeInterval);
+            oldAudio.pause();
+            oldAudio.currentTime = 0;
+          }
+        }, 25);
+      } catch (e) {
+        try { oldAudio.pause(); } catch (err) {}
+      }
     }
 
     try {
       const audio = new Audio(trackSrc);
       audio.loop = true;
-      audio.volume = Math.max(0, Math.min(1, this.volume * 0.75));
+      const targetVol = this.getTrackVolume(level);
+      audio.volume = targetVol;
       audio.setAttribute('data-level', level);
+
+      this.bgAudio = audio;
+      this.isMusicPlaying = true;
 
       const p = audio.play();
       if (p !== undefined) {
         p.then(() => {
-          this.bgAudio = audio;
-          this.isMusicPlaying = true;
-          console.log(`[AudioEngine] 🎵 Now playing Stage ${level} track: ${trackSrc}`);
+          console.log(`[AudioEngine] 🎵 Саундтрек Уровня ${level}: ${trackInfo.title}`);
         }).catch(err => {
           console.warn('[AudioEngine] Playback awaiting user gesture:', err);
         });
@@ -461,7 +489,9 @@ class AltushkaAudioEngine {
     if (this.bgAudio) {
       try {
         this.bgAudio.pause();
+        this.bgAudio.currentTime = 0;
       } catch (e) {}
+      this.bgAudio = null;
     }
     this.isMusicPlaying = false;
   }

@@ -1701,7 +1701,7 @@ body::after {
   font-weight: 800;
   box-shadow: 0 0 12px rgba(192, 132, 252, 0.25);
   transition: var(--transition);
-  cursor: pointer;
+  pointer-events: none;
 }
 
 .rebirth-item-card:hover:not(.disabled):not(.cant-afford) .rebirth-cost-btn {
