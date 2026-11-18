@@ -1,10 +1,16 @@
 /**
- * NEON VIBE CLICKER - PROCEDURAL SYNTH AUDIO ENGINE
- * Uses Web Audio API for 100% self-contained, latency-free retro-futuristic sound effects
- * No external audio files needed!
+ * ALTUSHKA CLICKER - PROCEDURAL SYNTH AUDIO ENGINE
+ * Adaptive sound profiles tailored to each Altushka Evolution Level!
+ * Level 1: Gentle acoustic / lo-fi plink
+ * Level 2: Pop-punk bubble / energy drink pop
+ * Level 3: Grunge overdrive / garage rock clink
+ * Level 4: Phonk 808 cowbell / trap transient
+ * Level 5: Deep heavy 808 sub bass drop & rave synth
+ *
+ * Background Music: Melodic Lo-Fi / Darkwave Ambient Synth (Zero harsh drone)
  */
 
-class NeonAudioEngine {
+class AltushkaAudioEngine {
   constructor() {
     this.ctx = null;
     this.masterGain = null;
@@ -12,25 +18,29 @@ class NeonAudioEngine {
     this.musicGain = null;
 
     this.sfxEnabled = true;
-    this.musicEnabled = false;
+    this.musicEnabled = true;
     this.volume = 0.7;
+    this.currentLevel = 1; // 1 to 5
 
-    // Ambient music synth nodes
-    this.ambientOscs = [];
-    this.ambientLfo = null;
+    // Altushka Evolution Soundtrack Lineup (Calibrated background volume)
+    this.stageTracks = {
+      1: { src: 'assets/audio/track_stage1.mp3', title: 'Спокойная мелодия (Серая мышка)', mult: 0.32 },
+      2: { src: 'assets/audio/track_stage2.mp3', title: 'cupsize — по барабану', mult: 0.22 },
+      3: { src: 'assets/audio/track_stage3.mp3', title: '9mice — narcotic', mult: 0.20 },
+      4: { src: 'assets/audio/track_stage4.mp3', title: 'kai angel — mulholland', mult: 0.22 },
+      5: { src: 'assets/audio/track_stage5.mp3', title: 'kai angel — babylon', mult: 0.20 }
+    };
+    this.bgAudio = null;
     this.isMusicPlaying = false;
-
-    // Musical scale for combo clicks (Pentatonic Minor / Cyberpunk vibe)
-    // A3, C4, D4, E4, G4, A4, C5, D5, E5, G5, A5
-    this.comboNotes = [220, 261.63, 293.66, 329.63, 392.0, 440.0, 523.25, 587.33, 659.25, 783.99, 880.0];
+    this.lastClickSoundTime = 0;
 
     // Load sound settings from localStorage
     try {
-      const savedSettings = localStorage.getItem('vibe_clicker_audio');
+      const savedSettings = localStorage.getItem('altushka_clicker_audio');
       if (savedSettings) {
         const parsed = JSON.parse(savedSettings);
         this.sfxEnabled = parsed.sfxEnabled ?? true;
-        this.musicEnabled = parsed.musicEnabled ?? false;
+        this.musicEnabled = parsed.musicEnabled ?? true;
         this.volume = parsed.volume ?? 0.7;
       }
     } catch (e) {
@@ -38,41 +48,58 @@ class NeonAudioEngine {
     }
   }
 
-  /**
-   * Initializes AudioContext upon user gesture
-   */
+  getTrackVolume(level = this.currentLevel) {
+    const t = this.stageTracks[level] || this.stageTracks[1];
+    return Math.max(0, Math.min(1, this.volume * (t.mult || 0.22)));
+  }
+
+  getCurrentTrackTitle() {
+    const t = this.stageTracks[this.currentLevel] || this.stageTracks[1];
+    return t.title || '';
+  }
+
+  setLevel(lvl) {
+    const newLvl = Math.max(1, Math.min(5, lvl));
+    const changed = this.currentLevel !== newLvl;
+    this.currentLevel = newLvl;
+    if (changed && this.musicEnabled) {
+      this.playStageMusic(this.currentLevel);
+    }
+  }
+
   init() {
     if (!this.ctx) {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (!AudioCtx) return;
       this.ctx = new AudioCtx();
 
-      // Master gain
       this.masterGain = this.ctx.createGain();
       this.masterGain.gain.setValueAtTime(this.volume, this.ctx.currentTime);
       this.masterGain.connect(this.ctx.destination);
 
-      // SFX bus
       this.sfxGain = this.ctx.createGain();
       this.sfxGain.gain.setValueAtTime(this.sfxEnabled ? 1 : 0, this.ctx.currentTime);
       this.sfxGain.connect(this.masterGain);
-
-      // Music bus
-      this.musicGain = this.ctx.createGain();
-      this.musicGain.gain.setValueAtTime(0, this.ctx.currentTime);
-      this.musicGain.connect(this.masterGain);
-
-      if (this.musicEnabled) {
-        this.startMusic();
-      }
     } else if (this.ctx.state === 'suspended') {
-      this.ctx.resume();
+      this.ctx.resume().catch(() => {});
     }
+
+    if (this.musicEnabled && (!this.bgAudio || this.bgAudio.paused)) {
+      this.playStageMusic(this.currentLevel);
+    }
+  }
+
+  safeDisconnect(...nodes) {
+    nodes.forEach(n => {
+      if (n && n.disconnect) {
+        try { n.disconnect(); } catch (e) {}
+      }
+    });
   }
 
   saveSettings() {
     try {
-      localStorage.setItem('vibe_clicker_audio', JSON.stringify({
+      localStorage.setItem('altushka_clicker_audio', JSON.stringify({
         sfxEnabled: this.sfxEnabled,
         musicEnabled: this.musicEnabled,
         volume: this.volume
@@ -84,6 +111,9 @@ class NeonAudioEngine {
     this.volume = Math.max(0, Math.min(1, val));
     if (this.masterGain && this.ctx) {
       this.masterGain.gain.setValueAtTime(this.volume, this.ctx.currentTime);
+    }
+    if (this.bgAudio) {
+      this.bgAudio.volume = this.getTrackVolume(this.currentLevel);
     }
     this.saveSettings();
   }
@@ -99,9 +129,12 @@ class NeonAudioEngine {
 
   toggleMusic() {
     this.init();
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(() => {});
+    }
     this.musicEnabled = !this.musicEnabled;
     if (this.musicEnabled) {
-      this.startMusic();
+      this.playStageMusic(this.currentLevel);
     } else {
       this.stopMusic();
     }
@@ -110,301 +143,363 @@ class NeonAudioEngine {
   }
 
   /**
-   * Click Sound - punchy neon pop with pitch scaling based on combo
+   * Adaptive Level Click Sound (Throttled for ultra-fast multi-finger tapping)
    */
-  playClick(comboLevel = 0, isCrit = false) {
+  playClick(comboMultiplier = 1, isCrit = false) {
     if (!this.sfxEnabled) return;
     this.init();
     if (!this.ctx) return;
 
     const t = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    const filter = this.ctx.createBiquadFilter();
+    // Prevent Web Audio voice exhaustion during intense trackpad bursts
+    if (t - this.lastClickSoundTime < 0.028) {
+      return;
+    }
+    this.lastClickSoundTime = t;
 
-    // Select frequency based on combo level
-    const noteIdx = Math.min(this.comboNotes.length - 1, Math.floor(comboLevel));
-    let baseFreq = this.comboNotes[noteIdx] || 440;
+    const mult = Math.min(3.5, comboMultiplier);
 
-    if (isCrit) baseFreq *= 1.5;
-
-    osc.type = isCrit ? 'triangle' : 'sine';
-    osc.frequency.setValueAtTime(baseFreq * 1.8, t);
-    osc.frequency.exponentialRampToValueAtTime(baseFreq, t + 0.08);
-
-    // Filter
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(isCrit ? 8000 : 4500, t);
-    filter.frequency.exponentialRampToValueAtTime(1000, t + 0.09);
-
-    // Gain envelope
-    const peakGain = isCrit ? 0.45 : 0.28;
-    gain.gain.setValueAtTime(0.01, t);
-    gain.gain.linearRampToValueAtTime(peakGain, t + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + (isCrit ? 0.16 : 0.09));
-
-    osc.connect(filter);
-    filter.connect(gain);
-    gain.connect(this.sfxGain);
-
-    osc.start(t);
-    osc.stop(t + 0.2);
-
-    // If critical hit, add a metallic secondary chime
-    if (isCrit) {
-      const chimeOsc = this.ctx.createOscillator();
-      const chimeGain = this.ctx.createGain();
-      chimeOsc.type = 'sine';
-      chimeOsc.frequency.setValueAtTime(baseFreq * 2.5, t);
-      chimeGain.gain.setValueAtTime(0.2, t);
-      chimeGain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
-      chimeOsc.connect(chimeGain);
-      chimeGain.connect(this.sfxGain);
-      chimeOsc.start(t);
-      chimeOsc.stop(t + 0.25);
+    switch (this.currentLevel) {
+      case 1:
+        this.playLevel1Click(t, mult, isCrit);
+        break;
+      case 2:
+        this.playLevel2Click(t, mult, isCrit);
+        break;
+      case 3:
+        this.playLevel3Click(t, mult, isCrit);
+        break;
+      case 4:
+        this.playLevel4Click(t, mult, isCrit);
+        break;
+      case 5:
+      default:
+        this.playLevel5Click(t, mult, isCrit);
+        break;
     }
   }
 
+  playLevel1Click(t, mult, isCrit) {
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    const baseFreq = isCrit ? 880 : (440 + mult * 40);
+    osc.frequency.setValueAtTime(baseFreq, t);
+    osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.5, t + 0.12);
+
+    gain.gain.setValueAtTime(isCrit ? 0.35 : 0.22, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + (isCrit ? 0.22 : 0.12));
+
+    osc.connect(gain);
+    gain.connect(this.sfxGain);
+    osc.onended = () => this.safeDisconnect(osc, gain);
+    osc.start(t);
+    osc.stop(t + (isCrit ? 0.23 : 0.13));
+  }
+
+  playLevel2Click(t, mult, isCrit) {
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'triangle';
+    const baseFreq = isCrit ? 700 : (280 + mult * 45);
+    osc.frequency.setValueAtTime(baseFreq, t);
+    osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.6, t + 0.04);
+    osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.8, t + 0.14);
+
+    gain.gain.setValueAtTime(isCrit ? 0.4 : 0.25, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+
+    osc.connect(gain);
+    gain.connect(this.sfxGain);
+    osc.onended = () => this.safeDisconnect(osc, gain);
+    osc.start(t);
+    osc.stop(t + 0.15);
+  }
+
   /**
-   * Purchase Upgrade Sound - ascending happy arpeggio chord
+   * Level 3: «Гаражная Тусовщица» — Crisp, satisfying bottle/glass clink with warm cider thud (Zero harsh buzz)
    */
+  playLevel3Click(t, mult, isCrit) {
+    // 1. Crisp high glass clink (satisfying glass bottle strike)
+    const oscClink = this.ctx.createOscillator();
+    const gainClink = this.ctx.createGain();
+    oscClink.type = 'triangle';
+    const clinkFreq = isCrit ? 1760 : (1320 + mult * 55);
+    oscClink.frequency.setValueAtTime(clinkFreq, t);
+    gainClink.gain.setValueAtTime(isCrit ? 0.26 : 0.16, t);
+    gainClink.gain.exponentialRampToValueAtTime(0.001, t + (isCrit ? 0.11 : 0.075));
+
+    // 2. Warm body pop (resonance of cider bottle)
+    const oscThud = this.ctx.createOscillator();
+    const gainThud = this.ctx.createGain();
+    oscThud.type = 'sine';
+    const thudFreq = isCrit ? 240 : (175 + mult * 15);
+    oscThud.frequency.setValueAtTime(thudFreq, t);
+    oscThud.frequency.exponentialRampToValueAtTime(65, t + 0.08);
+    gainThud.gain.setValueAtTime(isCrit ? 0.28 : 0.18, t);
+    gainThud.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+
+    oscClink.connect(gainClink);
+    gainClink.connect(this.sfxGain);
+    oscThud.connect(gainThud);
+    gainThud.connect(this.sfxGain);
+
+    oscClink.onended = () => this.safeDisconnect(oscClink, gainClink);
+    oscThud.onended = () => this.safeDisconnect(oscThud, gainThud);
+
+    oscClink.start(t);
+    oscClink.stop(t + 0.12);
+    oscThud.start(t);
+    oscThud.stop(t + 0.09);
+  }
+
+  playLevel4Click(t, mult, isCrit) {
+    const osc1 = this.ctx.createOscillator();
+    const osc2 = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc1.type = 'square';
+    osc2.type = 'square';
+
+    const root = isCrit ? 587.33 : (392.0 + (mult % 4) * 45);
+    osc1.frequency.setValueAtTime(root, t);
+    osc2.frequency.setValueAtTime(root * 1.503, t);
+
+    gain.gain.setValueAtTime(isCrit ? 0.28 : 0.18, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + (isCrit ? 0.25 : 0.16));
+
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(this.sfxGain);
+
+    osc1.onended = () => this.safeDisconnect(osc1, osc2, gain);
+
+    osc1.start(t);
+    osc2.start(t);
+    osc1.stop(t + (isCrit ? 0.26 : 0.17));
+    osc2.stop(t + (isCrit ? 0.26 : 0.17));
+  }
+
+  playLevel5Click(t, mult, isCrit) {
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sine';
+    const startFreq = isCrit ? 150 : (105 + mult * 15);
+    osc.frequency.setValueAtTime(startFreq, t);
+    osc.frequency.exponentialRampToValueAtTime(36, t + (isCrit ? 0.38 : 0.24));
+
+    gain.gain.setValueAtTime(isCrit ? 0.45 : 0.32, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + (isCrit ? 0.38 : 0.24));
+
+    osc.connect(gain);
+    gain.connect(this.sfxGain);
+    osc.onended = () => this.safeDisconnect(osc, gain);
+    osc.start(t);
+    osc.stop(t + (isCrit ? 0.39 : 0.25));
+  }
+
+  playSpeechPop() {
+    if (!this.sfxEnabled) return;
+    this.init();
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(380, t);
+    osc.frequency.exponentialRampToValueAtTime(750, t + 0.07);
+
+    gain.gain.setValueAtTime(0.15, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
+
+    osc.connect(gain);
+    gain.connect(this.sfxGain);
+    osc.onended = () => this.safeDisconnect(osc, gain);
+    osc.start(t);
+    osc.stop(t + 0.08);
+  }
+
   playBuy() {
     if (!this.sfxEnabled) return;
     this.init();
     if (!this.ctx) return;
-
     const t = this.ctx.currentTime;
-    const chords = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6
-
-    chords.forEach((freq, idx) => {
+    [330, 440, 660].forEach((freq, i) => {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
-      const noteTime = t + idx * 0.045;
-
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, noteTime);
-
-      gain.gain.setValueAtTime(0.001, noteTime);
-      gain.gain.linearRampToValueAtTime(0.18, noteTime + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.001, noteTime + 0.22);
-
-      osc.connect(gain);
-      gain.connect(this.sfxGain);
-
-      osc.start(noteTime);
-      osc.stop(noteTime + 0.25);
-    });
-  }
-
-  /**
-   * Fever Mode Activated Sound - energetic cyberpunk sweep
-   */
-  playFever() {
-    if (!this.sfxEnabled) return;
-    this.init();
-    if (!this.ctx) return;
-
-    const t = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(220, t);
-    osc.frequency.exponentialRampToValueAtTime(880, t + 0.35);
-
-    gain.gain.setValueAtTime(0.05, t);
-    gain.gain.linearRampToValueAtTime(0.3, t + 0.15);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
-
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(2000, t);
-    filter.frequency.exponentialRampToValueAtTime(6000, t + 0.35);
-
-    osc.connect(filter);
-    filter.connect(gain);
-    gain.connect(this.sfxGain);
-
-    osc.start(t);
-    osc.stop(t + 0.5);
-  }
-
-  /**
-   * Lucky Crystal Bonus Sound
-   */
-  playBonus() {
-    if (!this.sfxEnabled) return;
-    this.init();
-    if (!this.ctx) return;
-
-    const t = this.ctx.currentTime;
-    const notes = [659.25, 783.99, 987.77, 1318.51, 1567.98];
-
-    notes.forEach((freq, idx) => {
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      const noteTime = t + idx * 0.05;
-
       osc.type = 'triangle';
-      osc.frequency.setValueAtTime(freq, noteTime);
-
-      gain.gain.setValueAtTime(0.001, noteTime);
-      gain.gain.linearRampToValueAtTime(0.25, noteTime + 0.015);
-      gain.gain.exponentialRampToValueAtTime(0.001, noteTime + 0.35);
-
+      osc.frequency.setValueAtTime(freq, t + i * 0.05);
+      gain.gain.setValueAtTime(0.18, t + i * 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.05 + 0.1);
       osc.connect(gain);
       gain.connect(this.sfxGain);
-
-      osc.start(noteTime);
-      osc.stop(noteTime + 0.4);
+      osc.onended = () => this.safeDisconnect(osc, gain);
+      osc.start(t + i * 0.05);
+      osc.stop(t + i * 0.05 + 0.11);
     });
   }
 
-  /**
-   * Rebirth / Quantum Leap Sound - huge sub-bass drop and cosmic sweep
-   */
-  playRebirth() {
+  playEventAlert() {
     if (!this.sfxEnabled) return;
     this.init();
     if (!this.ctx) return;
-
     const t = this.ctx.currentTime;
-    
-    // Sub-bass boom
-    const subOsc = this.ctx.createOscillator();
-    const subGain = this.ctx.createGain();
-    subOsc.type = 'sine';
-    subOsc.frequency.setValueAtTime(150, t);
-    subOsc.frequency.exponentialRampToValueAtTime(30, t + 1.2);
-    subGain.gain.setValueAtTime(0.5, t);
-    subGain.gain.exponentialRampToValueAtTime(0.001, t + 1.2);
-    subOsc.connect(subGain);
-    subGain.connect(this.sfxGain);
-    subOsc.start(t);
-    subOsc.stop(t + 1.3);
-
-    // Cosmic laser riser
-    const riser = this.ctx.createOscillator();
-    const riserGain = this.ctx.createGain();
-    riser.type = 'sawtooth';
-    riser.frequency.setValueAtTime(110, t);
-    riser.frequency.exponentialRampToValueAtTime(1200, t + 1.0);
-    riserGain.gain.setValueAtTime(0.01, t);
-    riserGain.gain.linearRampToValueAtTime(0.35, t + 0.6);
-    riserGain.gain.exponentialRampToValueAtTime(0.001, t + 1.1);
-
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(500, t);
-    filter.frequency.exponentialRampToValueAtTime(8000, t + 0.9);
-
-    riser.connect(filter);
-    filter.connect(riserGain);
-    riserGain.connect(this.sfxGain);
-    riser.start(t);
-    riser.stop(t + 1.2);
+    [440, 554, 659].forEach((f, i) => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(f, t + i * 0.07);
+      gain.gain.setValueAtTime(0.2, t + i * 0.07);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.07 + 0.12);
+      osc.connect(gain);
+      gain.connect(this.sfxGain);
+      osc.onended = () => this.safeDisconnect(osc, gain);
+      osc.start(t + i * 0.07);
+      osc.stop(t + i * 0.07 + 0.13);
+    });
   }
 
-  /**
-   * Achievement Unlocked Sound
-   */
+  playEvolution() {
+    if (!this.sfxEnabled) return;
+    this.init();
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const notes = [130.81, 196.00, 261.63, 329.63, 392.00, 523.25, 659.25, 783.99, 1046.50];
+    notes.forEach((f, idx) => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(f, t + idx * 0.07);
+      gain.gain.setValueAtTime(0.25, t + idx * 0.07);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + idx * 0.07 + 0.35);
+      osc.connect(gain);
+      gain.connect(this.sfxGain);
+      osc.onended = () => this.safeDisconnect(osc, gain);
+      osc.start(t + idx * 0.07);
+      osc.stop(t + idx * 0.07 + 0.36);
+    });
+  }
+
   playAchievement() {
     if (!this.sfxEnabled) return;
     this.init();
     if (!this.ctx) return;
-
     const t = this.ctx.currentTime;
-    const chords = [440, 554.37, 659.25, 880]; // A major
-
-    chords.forEach((freq, idx) => {
+    [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
-      const noteTime = t + idx * 0.06;
-
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, noteTime);
-
-      gain.gain.setValueAtTime(0.001, noteTime);
-      gain.gain.linearRampToValueAtTime(0.2, noteTime + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.001, noteTime + 0.6);
-
+      osc.frequency.setValueAtTime(freq, t + i * 0.08);
+      gain.gain.setValueAtTime(0.25, t + i * 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.08 + 0.22);
       osc.connect(gain);
       gain.connect(this.sfxGain);
-
-      osc.start(noteTime);
-      osc.stop(noteTime + 0.7);
+      osc.onended = () => this.safeDisconnect(osc, gain);
+      osc.start(t + i * 0.08);
+      osc.stop(t + i * 0.08 + 0.23);
     });
+  }
+
+  playFeverStart() {
+    if (!this.sfxEnabled) return;
+    this.init();
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(160, t);
+    osc.frequency.exponentialRampToValueAtTime(700, t + 0.35);
+
+    gain.gain.setValueAtTime(0.25, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+
+    osc.connect(gain);
+    gain.connect(this.sfxGain);
+    osc.onended = () => this.safeDisconnect(osc, gain);
+    osc.start(t);
+    osc.stop(t + 0.41);
   }
 
   /**
-   * Chill Ambient Synthwave Background Drone
-   * Soft, warm detuned low saw/sine pad with subtle LFO filter breathing
+   * HIGH-FIDELITY STAGE SOUNDTRACK SYSTEM
+   * 1: Спокойная гитара / мелодия (Серая мышка)
+   * 2: cupsize — по барабану
+   * 3: 9mice — narcotic
+   * 4: kai angel — mulholland
+   * 5: kai angel — babylon
+   * Громкость сбалансирована под фон, чтобы не заглушать тапы и эффекты.
    */
-  startMusic() {
-    if (!this.ctx || this.isMusicPlaying) return;
-    this.isMusicPlaying = true;
+  playStageMusic(level = this.currentLevel) {
+    if (!this.musicEnabled) return;
+    const trackInfo = this.stageTracks[level] || this.stageTracks[1];
+    const trackSrc = trackInfo.src;
 
-    const t = this.ctx.currentTime;
-    this.musicGain.gain.setValueAtTime(0.001, t);
-    this.musicGain.gain.linearRampToValueAtTime(0.18, t + 2); // Smooth fade in
+    if (this.bgAudio && this.bgAudio.getAttribute('data-level') == level && !this.bgAudio.paused) {
+      return;
+    }
 
-    // Bass root + fifth + octave drone (A1, E2, A2)
-    const baseFreqs = [55, 82.41, 110, 164.81];
+    const oldAudio = this.bgAudio;
+    if (oldAudio) {
+      // Fade out old track smoothly over 250ms
+      try {
+        const fadeStep = oldAudio.volume / 10;
+        let stepCount = 0;
+        const fadeInterval = setInterval(() => {
+          stepCount++;
+          if (oldAudio.volume > fadeStep) {
+            oldAudio.volume = Math.max(0, oldAudio.volume - fadeStep);
+          }
+          if (stepCount >= 10 || oldAudio.volume <= 0.01) {
+            clearInterval(fadeInterval);
+            oldAudio.pause();
+            oldAudio.currentTime = 0;
+          }
+        }, 25);
+      } catch (e) {
+        try { oldAudio.pause(); } catch (err) {}
+      }
+    }
 
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(320, t);
-    filter.Q.setValueAtTime(2.5, t);
+    try {
+      const audio = new Audio(trackSrc);
+      audio.loop = true;
+      const targetVol = this.getTrackVolume(level);
+      audio.volume = targetVol;
+      audio.setAttribute('data-level', level);
 
-    // LFO to slowly sweep filter
-    const lfo = this.ctx.createOscillator();
-    lfo.type = 'sine';
-    lfo.frequency.setValueAtTime(0.2, t); // 5 sec sweep cycle
-    const lfoGain = this.ctx.createGain();
-    lfoGain.gain.setValueAtTime(140, t);
-    lfo.connect(lfoGain);
-    lfoGain.connect(filter.frequency);
-    lfo.start(t);
-    this.ambientLfo = lfo;
+      this.bgAudio = audio;
+      this.isMusicPlaying = true;
 
-    filter.connect(this.musicGain);
-
-    this.ambientOscs = baseFreqs.map((freq, idx) => {
-      const osc = this.ctx.createOscillator();
-      osc.type = idx % 2 === 0 ? 'sawtooth' : 'triangle';
-      // Slight detune for analog warmth
-      const detune = (idx - 1.5) * 5;
-      osc.frequency.setValueAtTime(freq, t);
-      osc.detune.setValueAtTime(detune, t);
-
-      const oscGain = this.ctx.createGain();
-      oscGain.gain.setValueAtTime(0.12 / baseFreqs.length, t);
-      osc.connect(oscGain);
-      oscGain.connect(filter);
-      osc.start(t);
-      return osc;
-    });
+      const p = audio.play();
+      if (p !== undefined) {
+        p.then(() => {
+          console.log(`[AudioEngine] 🎵 Саундтрек Уровня ${level}: ${trackInfo.title}`);
+        }).catch(err => {
+          console.warn('[AudioEngine] Playback awaiting user gesture:', err);
+        });
+      }
+    } catch (e) {
+      console.warn('[AudioEngine] Could not load stage audio', e);
+    }
   }
 
   stopMusic() {
-    if (!this.isMusicPlaying || !this.ctx) return;
-    const t = this.ctx.currentTime;
-    this.musicGain.gain.linearRampToValueAtTime(0.001, t + 1.2); // Smooth fade out
+    if (this.bgAudio) {
+      try {
+        this.bgAudio.pause();
+        this.bgAudio.currentTime = 0;
+      } catch (e) {}
+      this.bgAudio = null;
+    }
+    this.isMusicPlaying = false;
+  }
 
-    setTimeout(() => {
-      this.ambientOscs.forEach(osc => {
-        try { osc.stop(); osc.disconnect(); } catch (e) {}
-      });
-      this.ambientOscs = [];
-
-      if (this.ambientLfo) {
-        try { this.ambientLfo.stop(); this.ambientLfo.disconnect(); } catch (e) {}
-        this.ambientLfo = null;
-      }
-      this.isMusicPlaying = false;
-    }, 1200);
+  startMusic() {
+    this.playStageMusic(this.currentLevel);
   }
 }
 
-// Global audio instance
-window.neonAudio = new NeonAudioEngine();
+// Global instance
+window.audioEngine = new AltushkaAudioEngine();

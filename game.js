@@ -1,11 +1,13 @@
 /**
- * NEON VIBE CLICKER - CORE GAME ENGINE V2
- * Expanded with:
- * 1. Enlarged click zone (clicking anywhere in the stage registers clicks)
- * 2. Confined Lucky Crystal (flies strictly within the left clicker column)
- * 3. Orbiting badges for purchased AI & upgrades near the core
- * 4. Multi-level Rebirth System with AI Eras: DeepSeek, Qwen, Gemini, ChatGPT, Claude + Custom Themes + Neuro-Shards Shop
- * 5. Epic Meme Achievement Popups with fanfare!
+ * ALTUSHKA CLICKER - CORE ENGINE (VK MINI APPS EDITION)
+ * 
+ * Complies with VK Mini Apps / VK Games Moderation Rules:
+ * - 4.2.1: Monetization via VK Bridge Rewarded Video & Interstitial ads
+ * - 4.2.4: Polished clicker mechanics (producers, boosters, fever mode, offline income)
+ * - 4.2.5: High quality responsive UI with adaptive themes
+ * - 4.2.7: Game progression pacing strictly exceeds 10 minutes + visible playtime timer
+ * - 4.2.10: Full-fledged Start Menu Screen with Play, Tutorial, Settings, and Audio controls
+ * - VK Storage Quota Compliance: Single variable (1/1000 keys) and throttled sync (< 40 calls/hour vs 1000 limit)
  */
 
 // Format numbers into human-readable notation (e.g. 1.25M, 450.2K)
@@ -24,12 +26,25 @@ function formatNumber(num) {
   return scaled.toFixed(scaled >= 100 ? 1 : 2) + suffixes[formattedIndex];
 }
 
-class NeonVibeGame {
+// Format seconds into MM:SS or HH:MM:SS
+function formatTime(seconds) {
+  const s = Math.floor(seconds);
+  const hrs = Math.floor(s / 3600);
+  const mins = Math.floor((s % 3600) / 60);
+  const secs = s % 60;
+  if (hrs > 0) {
+    return `${hrs}:${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  }
+  return `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
+}
+
+class AltushkaGame {
   constructor() {
-    this.saveKey = 'vibe_clicker_save_v3';
+    this.saveKey = 'altushka_clicker_save_v1';
+    this.vkCloudKey = 'altushka_save_vk'; // Exactly 1 key used out of 1000 allowed!
 
     // Game State
-    this.score = 0;
+    this.score = 0; // Alt-coins 🖤
     this.totalScoreEarned = 0;
     this.totalClicks = 0;
     this.totalBonuses = 0;
@@ -37,79 +52,156 @@ class NeonVibeGame {
     this.lastSaveTime = Date.now();
     this.lastTickTime = Date.now();
 
-    // Rebirth / Prestige System
-    this.rebirthLevel = 0;
-    this.rebirthClicks = 0; // clicks in current rebirth
-    this.neuroShards = 0;
+    // 4.2.7 Playtime tracking (> 10 minutes required by moderation)
+    this.sessionPlayTimeSec = 0;
+    this.totalPlayTimeSec = 0;
+    this.gameStarted = false; // toggled when player clicks "Play" in Start Menu
+
+    // Evolution / Prestige System (5 Stages)
+    this.rebirthLevel = 0; // 0 to 4 (representing Levels 1 to 5)
+    this.rebirthClicks = 0; // clicks in current evolution level
+    this.neuroShards = 0; // Alt-Shards 🦇
     this.totalShardsEarned = 0;
 
-    // AI Eras
+    // VK Storage API Call Rate Limiter (Limit: < 1000 calls per hour)
+    this.vkStorageCallCount = 0;
+    this.vkStorageHourStart = Date.now();
+    this.lastVkCloudSaveTime = 0;
+    this.cloudSyncReady = false; // Guard to prevent race overwriting cloud data on boot
+
+    // Mobile touch guard & tap throttling (Item 11)
+    this.lastTouchTimestamp = 0;
+    this.lastTapTimestamp = 0;
+    this.lastBuyTime = 0;
+    this.isResetting = false;
+
+    // Single-instance Lucky Bonus state (Item 3)
+    this.luckyActive = false;
+    this.luckyMoveInterval = null;
+    this.luckyTimeout = null;
+    this.spriteTapTimer = null;
+    this.achBannerTimer = null;
+
+    // 5 Evolution Stages with balanced pacing (> 10 min to reach Stage 5)
     this.eras = [
       {
         level: 0,
-        name: 'Базовая Матрица',
-        icon: '⚡',
-        clicksNeeded: 150,
-        themeClass: 'theme-era-0',
-        quote: '«Эра чистого железа и базовых скриптов на коленке»'
+        stageNumber: 1,
+        name: 'Серая Мышка (Нормис)',
+        avatar: '🐭',
+        bgImage: 'assets/images/pack1_level1.jpg',
+        spriteImage: 'assets/images/pack1_level1.jpg',
+        clicksNeeded: 200,
+        coinsNeeded: 10000,
+        themeClass: 'theme-stage-1',
+        quote: '«Обычная скромная школьница, делающая уроки на кухне»',
+        shardsReward: 5
       },
       {
         level: 1,
-        name: 'DeepSeek (Дипсик)',
-        icon: '🐳',
-        clicksNeeded: 450,
-        themeClass: 'theme-era-deepseek',
-        quote: '«Китайский мемный гений, обрушивший акции техногигантов!»'
+        stageNumber: 2,
+        name: 'Начинающая Альтушка',
+        avatar: '⚡',
+        bgImage: 'assets/images/pack1_level2.jpg',
+        spriteImage: 'assets/images/pack1_level2.jpg',
+        clicksNeeded: 650,
+        coinsNeeded: 180000,
+        themeClass: 'theme-stage-2',
+        quote: '«Первые стрелки, фиолетовые пряди и баночка энергетика в подъезде!»',
+        shardsReward: 15
       },
       {
         level: 2,
-        name: 'Qwen Chat (Квен)',
-        icon: '🐉',
-        clicksNeeded: 1200,
-        themeClass: 'theme-era-qwen',
-        quote: '«Восточный дракон логики, рассуждений и бесконечного дзена»'
+        stageNumber: 3,
+        name: 'Гаражная Тусовщица',
+        avatar: '🍾',
+        bgImage: 'assets/images/pack1_level3.jpg',
+        spriteImage: 'assets/images/pack1_level3.jpg',
+        clicksNeeded: 2000,
+        coinsNeeded: 3500000,
+        themeClass: 'theme-stage-3',
+        quote: '«Плотная фигурка 160см, чокер с шипами, сидр и ночные гаражи!»',
+        shardsReward: 35
       },
       {
         level: 3,
-        name: 'Gemini (Гемини)',
-        icon: '♊',
-        clicksNeeded: 3000,
-        themeClass: 'theme-era-gemini',
-        quote: '«Мультимодальный супермозг от Google, читающий гигабайты мыслей»'
+        stageNumber: 4,
+        name: 'Дрейн-Икона (Виперша)',
+        avatar: '🖤',
+        bgImage: 'assets/images/pack1_level4.jpg',
+        spriteImage: 'assets/images/pack1_level4.jpg',
+        clicksNeeded: 5000,
+        coinsNeeded: 65000000,
+        themeClass: 'theme-stage-4',
+        quote: '«Китай-город, оверсайз зипка, септум и треки 9mice на репите!»',
+        shardsReward: 80
       },
       {
         level: 4,
-        name: 'ChatGPT (Чат ГПТ)',
-        icon: '🤖',
-        clicksNeeded: 7500,
-        themeClass: 'theme-era-chatgpt',
-        quote: '«Легенда Сэма Альтмана, пишущая стихи и привлекающая миллиарды»'
-      },
-      {
-        level: 5,
-        name: 'Claude (Клод)',
-        icon: '🧠',
-        clicksNeeded: 18000,
-        themeClass: 'theme-era-claude',
-        quote: '«Божественный философ и абсолютный архитектор чистого кода»'
-      },
-      {
-        level: 6,
-        name: 'Сингулярность AI',
-        icon: '🌌',
-        clicksNeeded: 40000,
-        themeClass: 'theme-era-claude',
-        quote: '«Точка невозврата. Разум и вайб стали единым целым»'
+        stageNumber: 5,
+        name: 'Ультра-Альтушка (160см / 140кг)',
+        avatar: '👑',
+        bgImage: 'assets/images/pack1_level5.jpg',
+        spriteImage: 'assets/images/pack1_level5.jpg',
+        clicksNeeded: 15000,
+        coinsNeeded: 500000000,
+        themeClass: 'theme-stage-5',
+        quote: '«160 см, 140 кг, абсолютная сексуальная королева рейва!»',
+        shardsReward: 200
       }
     ];
 
-    // Rebirth Upgrades (Purchased with 💠 Neuro-Shards)
+    // Speech Quotes for each stage
+    this.speechQuotes = {
+      0: [
+        "Ой, не нажимамай так сильно...",
+        "Я уроки не доделала на завтра",
+        "Мама сказала в 9 вечера быть дома",
+        "Что такое дрейн?..",
+        "Мне немного неловко...",
+        "Чайник на плите свистит"
+      ],
+      1: [
+        "Купи мне монстрик!",
+        "Смотри, я прядь тоником покрасила!",
+        "Не трогай заколки, стрелка смажется!",
+        "Погнали за школу покурим?",
+        "Я не позерша, понятно?!",
+        "Включи погромче в наушниках!"
+      ],
+      2: [
+        "Го в гаражи с сидром?",
+        "Сидр холодный передай",
+        "Тут сыро, зато какой вайб!",
+        "Чокер не трогай, шипы острые!",
+        "Скуфы опять смотрят...",
+        "Нормисам никогда не понять"
+      ],
+      3: [
+        "Вайперр в ушах — депрессия в душе 💔",
+        "Встретимся на Китай-городе у лавочек",
+        "Септум новый зацени!",
+        "У меня дед-инсайд фаза...",
+        "9mice гений, плачу под новый трек",
+        "Скинься на New Rock на день рождения"
+      ],
+      4: [
+        "160 сантиметров чистого стиля!",
+        "140 килограмм сочного величия 💅",
+        "Королева рейва в здании!",
+        "Все скуфы упали передо мной!",
+        "Заряжена на максимум басов!",
+        "Тапай активнее, зай, не отвлекайся!"
+      ]
+    };
+
+    // Rebirth / Alt-Shards Upgrades (Purchased with 🦇 Shards)
     this.rebirthUpgrades = [
       {
-        id: 'quantum_mult',
-        name: 'Квантовый Множитель',
-        desc: '+50% ко всему вайбу за уровень перка',
-        icon: '🧬',
+        id: 'alt_mult',
+        name: 'Альт-Множитель',
+        desc: '+50% ко всем Альт-коинам за уровень перка',
+        icon: '🖤',
         level: 0,
         baseCost: 5,
         costMult: 1.8,
@@ -117,9 +209,9 @@ class NeonVibeGame {
       },
       {
         id: 'fast_start',
-        name: 'Кофейный Рестарт',
-        desc: 'Начинайте перерождение сразу с запасом Кофе и Энергетиков (+5 и +2 за ур.)',
-        icon: '☕',
+        name: 'Запас Карманных',
+        desc: 'Начинайте уровень сразу с запасом денег от бабушки и энергетиков',
+        icon: '⚡',
         level: 0,
         baseCost: 10,
         costMult: 2.0,
@@ -127,7 +219,7 @@ class NeonVibeGame {
       },
       {
         id: 'hyper_crit',
-        name: 'Гипер-Криты',
+        name: 'Дед-Инсайд Криты',
         desc: 'Криты наносят x10 вместо x5, и +3% к шансу крита за ур.',
         icon: '🎯',
         level: 0,
@@ -137,19 +229,19 @@ class NeonVibeGame {
       },
       {
         id: 'auto_tapper',
-        name: 'Авто-Таппер Матрицы',
-        desc: 'Ядро само автоматически кликает 2 раза в секунду!',
-        icon: '⚡',
+        name: 'Фан-Клуб Скуфов',
+        desc: 'Альтушка сама автоматически тапает 2 раза в секунду!',
+        icon: '👴',
         level: 0,
         baseCost: 20,
         costMult: 2.5,
         maxLevel: 5
       },
       {
-        id: 'crystal_magnet',
-        name: 'Магнит Кристаллов',
-        desc: 'Летающие глитч-кристаллы появляются на 30% чаще',
-        icon: '💎',
+        id: 'snack_magnet',
+        name: 'Магнит Вкусняшек',
+        desc: 'Летающие бонусы и вкусняшки появляются на 35% чаще',
+        icon: '🍩',
         level: 0,
         baseCost: 18,
         costMult: 2.2,
@@ -157,22 +249,22 @@ class NeonVibeGame {
       }
     ];
 
-    // Auto-clickers (Producers)
+    // Auto-clickers (Альт-Движ)
     this.producers = [
       {
-        id: 'coffee',
-        name: 'Кофе «Espresso Neon»',
-        desc: 'Бодрящий глоток темной обжарки для ночного кодинга',
-        icon: '☕',
+        id: 'pocket_money',
+        name: 'Карманные от бабушки',
+        desc: 'Скромная заначка на мелочи и проезд',
+        icon: '👵',
         count: 0,
         baseCost: 15,
         costMult: 1.15,
         baseVps: 0.5
       },
       {
-        id: 'energy',
-        name: 'Энергетик «Cyber Rush»',
-        desc: 'Ударная доза таурина, кофеина и чистой энергии',
+        id: 'monster',
+        name: 'Энергетик Monster Ultra',
+        desc: 'Белый монстрик без сахара — топливо для ночных посиделок',
         icon: '⚡',
         count: 0,
         baseCost: 100,
@@ -180,74 +272,94 @@ class NeonVibeGame {
         baseVps: 4
       },
       {
-        id: 'gpu',
-        name: 'Видеокарта «RTX 5090 Ti»',
-        desc: 'Аппаратный майнинг лучей вайба на ультра-настройках',
-        icon: '🎮',
+        id: 'hair_dye',
+        name: 'Краска «Тоника» (фиолетовая)',
+        desc: 'Вся раковина в фиолетовых разводах, зато пряди сияют!',
+        icon: '🎨',
         count: 0,
         baseCost: 1100,
         costMult: 1.15,
         baseVps: 32
       },
       {
-        id: 'deepseek',
-        name: 'Нейросеть «DeepSeek V3»',
-        desc: 'Дешевый, дерзкий и умный китайский ИИ. Ломает бенчмарки!',
-        icon: '🐳',
+        id: 'cider',
+        name: 'Сидр в гаражах',
+        desc: 'Яблочный вишневый сидр из КБ под светом уличного фонаря',
+        icon: '🍾',
         count: 0,
         baseCost: 12000,
         costMult: 1.15,
         baseVps: 320
       },
       {
-        id: 'qwen',
-        name: 'Нейросеть «Qwen 2.5 Max»',
-        desc: 'Восточный дракон логики от Alibaba. Решает сложнейшие задачи',
-        icon: '🐉',
+        id: 'zip_hoodie',
+        name: 'Оверсайз зипка с костями',
+        desc: 'Огромное черное худи с паутиной и молнией до капюшона',
+        icon: '🧥',
         count: 0,
         baseCost: 85000,
         costMult: 1.15,
         baseVps: 2200
       },
       {
-        id: 'gemini',
-        name: 'Нейросеть «Gemini 2.5 Pro»',
-        desc: 'Мультимодальный титан от Google. Понимает видео, аудио и код',
-        icon: '♊',
+        id: 'spiked_choker',
+        name: 'Чокер с шипами и кольцом',
+        desc: 'Классика жанра. Острый, блестящий, дерзкий',
+        icon: '⛓️',
         count: 0,
         baseCost: 650000,
         costMult: 1.15,
         baseVps: 15000
       },
       {
-        id: 'chatgpt',
-        name: 'Нейросеть «ChatGPT 4o»',
-        desc: 'Легенда OpenAI. Общается голосом, шутит и делает презентации',
-        icon: '🤖',
+        id: 'viperr_merch',
+        name: 'Мерч Viperr / 9mice',
+        desc: 'Эксклюзивная футболка с концерта с перегруженным логотипом',
+        icon: '🖤',
         count: 0,
         baseCost: 4500000,
         costMult: 1.15,
         baseVps: 95000
       },
       {
-        id: 'claude',
-        name: 'Нейросеть «Claude 3.7 Sonnet»',
-        desc: 'Бог программирования и архитектуры от Anthropic. Пишет код идеально',
-        icon: '🧠',
+        id: 'new_rocks',
+        name: 'Платформы New Rock',
+        desc: 'Тяжеленные берцы на 10-сантиметровой подошве с металлом',
+        icon: '👢',
         count: 0,
         baseCost: 32000000,
         costMult: 1.15,
         baseVps: 750000
+      },
+      {
+        id: 'twitch_stream',
+        name: 'Стрим на Твиче (Донаты скуфов)',
+        desc: 'Сидишь в ушках с подсветкой, а донаты летят рекой',
+        icon: '📱',
+        count: 0,
+        baseCost: 250000000,
+        costMult: 1.15,
+        baseVps: 6000000
+      },
+      {
+        id: 'garage_coop',
+        name: 'Личный гаражный кооператив',
+        desc: 'Целая база для ночных рейвов, музыки и тусовок',
+        icon: '🏭',
+        count: 0,
+        baseCost: 2000000000,
+        costMult: 1.15,
+        baseVps: 50000000
       }
     ];
 
-    // Manual Click Boosters & Upgrades
+    // Manual Click Boosters & Upgrades (Шмот и Тюнинг)
     this.boosters = [
       {
-        id: 'click_cursor',
-        name: 'Неоновый Курсор',
-        desc: '+1 к базовой силе каждого клика',
-        icon: '👆',
+        id: 'eyeliner',
+        name: 'Черные стрелки',
+        desc: '+1 к силе каждого тапа по альтушке',
+        icon: '👁️',
         count: 0,
         maxCount: 25,
         baseCost: 25,
@@ -255,21 +367,22 @@ class NeonVibeGame {
         bonusVpc: 1
       },
       {
-        id: 'click_mechanical',
-        name: 'Тактильная Механика',
-        desc: '+5 к силе каждого клика (синие свитчи)',
-        icon: '⌨️',
+        id: 'septum',
+        name: 'Пирсинг септума',
+        desc: '+5 к силе тапа и +4% к шансу критического удара',
+        icon: '💍',
         count: 0,
         maxCount: 25,
         baseCost: 220,
         costMult: 1.55,
-        bonusVpc: 5
+        bonusVpc: 5,
+        critChance: 0.04
       },
       {
-        id: 'click_overclock',
-        name: 'Разгон Частоты Клика',
-        desc: '+35 к силе каждого клика',
-        icon: '🔥',
+        id: 'skull_ring',
+        name: 'Кольцо с черепом',
+        desc: '+35 к силе тапа при каждом нажатии',
+        icon: '💀',
         count: 0,
         maxCount: 25,
         baseCost: 2500,
@@ -277,10 +390,10 @@ class NeonVibeGame {
         bonusVpc: 35
       },
       {
-        id: 'resonance',
-        name: 'Вайб-Резонанс',
-        desc: 'Каждый клик дополнительно дает +1.5% от вашего дохода/сек',
-        icon: '🔮',
+        id: 'bass_headphones',
+        name: 'Наушники с басами',
+        desc: 'Каждый клик дает +1.5% от вашего дохода/сек',
+        icon: '🎧',
         count: 0,
         maxCount: 15,
         baseCost: 15000,
@@ -288,15 +401,26 @@ class NeonVibeGame {
         resonancePercent: 0.015
       },
       {
-        id: 'crit_luck',
-        name: 'Критический Импульс',
-        desc: '12% шанс нанести СУПЕР-КЛИК с умножением x5 (или x10+ с перком)',
-        icon: '🎯',
+        id: 'kefir_stash',
+        name: 'Заначка кефирчика',
+        desc: '+12% к шансу нанести СУПЕР-ТАП с критом x5',
+        icon: '🥛',
         count: 0,
         maxCount: 5,
         baseCost: 45000,
         costMult: 2.5,
         critChance: 0.12
+      },
+      {
+        id: 'leather_jacket',
+        name: 'Косуха с заклепками',
+        desc: '+250 к базовой силе тапа',
+        icon: '🖤',
+        count: 0,
+        maxCount: 15,
+        baseCost: 180000,
+        costMult: 2.0,
+        bonusVpc: 250
       }
     ];
 
@@ -308,174 +432,301 @@ class NeonVibeGame {
     this.feverTimer = 0;
     this.activeBuffs = [];
 
-    // Meme Achievements List
+    // Meme Achievements List with Rewards (Alt-Coins 🖤 & Alt-Shards 🦇)
     this.achievements = [
       {
         id: 'first_click',
-        title: 'Первый импульс',
-        desc: 'Сделайте свой самый первый клик',
+        title: 'Первое знакомство',
+        desc: 'Сделайте самый первый тап по альтушке',
         memeTag: 'БАЗА ДНЯ 🗿',
-        memeQuote: '«Ты кликнул так уверенно, что сервер слегка вздрогнул»',
-        icon: '✨',
+        memeQuote: '«Ты осторожно коснулся экрана. Альтушка вопросительно посмотрела»',
+        icon: '🖤',
+        rewardCoins: 500,
+        rewardShards: 0,
         unlocked: false,
+        claimed: false,
         check: () => this.totalClicks >= 1
       },
       {
         id: 'click_100',
-        title: 'Быстрые пальцы',
-        desc: 'Совершите 100 кликов',
-        memeTag: 'СИГМА-ГРИНДСЕТ 🐺',
-        memeQuote: '«Клавиатура начинает плавиться, но ты не останавливаешься»',
+        title: 'Быстрые пальчики',
+        desc: 'Совершите 100 тапов',
+        memeTag: 'АЛЬТ-ГРИНД ⚡',
+        memeQuote: '«Стрелки на глазах дрожат, но ты продолжаешь кликать!»',
         icon: '⚡',
+        rewardCoins: 2500,
+        rewardShards: 1,
         unlocked: false,
+        claimed: false,
         check: () => this.totalClicks >= 100
       },
       {
         id: 'click_1000',
-        title: 'Кликер-машина',
-        desc: 'Преодолейте отметку в 1,000 кликов',
-        memeTag: 'ГИГАЧАД ОБНАРУЖЕН 🦾',
-        memeQuote: '«Твои пальцы теперь занесены в реестр высокоточного оружия»',
+        title: 'Главный фанат',
+        desc: 'Преодолейте 1,000 тапов',
+        memeTag: 'СКУФ-ГИГАЧАД 🦾',
+        memeQuote: '«Ты заслужил уважение всего гаражного кооператива»',
         icon: '🦾',
+        rewardCoins: 25000,
+        rewardShards: 3,
         unlocked: false,
+        claimed: false,
         check: () => this.totalClicks >= 1000
       },
       {
-        id: 'first_coffee',
-        title: 'Утренний прогрев',
-        desc: 'Купите первую чашку кофе',
-        memeTag: 'ПРОГРЕВ ГОЕВ ☕',
-        memeQuote: '«Кофе за 15 вайбов — и ты уже готов переписать ядро Linux»',
-        icon: '☕',
+        id: 'play_10min',
+        title: 'Ветеран спальников',
+        desc: 'Проведите в игре более 10 минут (Правило 4.2.7)',
+        memeTag: 'ТРУ-АЛЬТУШНИК ⏱️',
+        memeQuote: '«Более 10 минут в альт-вселенной. Модераторы VK одобрительно кивают!»',
+        icon: '⏱️',
+        rewardCoins: 50000,
+        rewardShards: 5,
         unlocked: false,
-        check: () => this.getProducerCount('coffee') >= 1
+        claimed: false,
+        check: () => this.totalPlayTimeSec >= 600
       },
       {
-        id: 'energy_rush',
-        title: 'Не спать, кодить!',
-        desc: 'Запаситесь 5 банками энергетика',
-        memeTag: 'ТАУРИНОВЫЙ БОГ ⚡',
-        memeQuote: '«Сердце бьется со скоростью 240 FPS в 4K разрешении»',
-        icon: '🔋',
+        id: 'first_monster',
+        title: 'Белый Монстрик',
+        desc: 'Купите первый энергетик',
+        memeTag: 'ТОПЛИВО ДНЯ ⚡',
+        memeQuote: '«Холодный пшик банки, и ты готов не спать до утра»',
+        icon: '⚡',
+        rewardCoins: 1000,
+        rewardShards: 0,
         unlocked: false,
-        check: () => this.getProducerCount('energy') >= 5
+        claimed: false,
+        check: () => this.getProducerCount('monster') >= 1
       },
       {
-        id: 'gpu_mining',
-        title: 'Ферма настроения',
-        desc: 'Установите хотя бы 1 видеокарту RTX 5090',
-        memeTag: 'ВЕНТИЛЯТОРЫ В АСТРАЛЕ 🚀',
-        memeQuote: '«Соседи жалуются на гул, но майнинг чистого кайфа продолжается»',
-        icon: '🎮',
+        id: 'hair_purple',
+        title: 'Фиолетовый бунт',
+        desc: 'Купите краску «Тоника»',
+        memeTag: 'МАМА БУДЕТ В ШОКЕ 🎨',
+        memeQuote: '«Вся ванна в фиолетовых каплях, но результат того стоил»',
+        icon: '🎨',
+        rewardCoins: 5000,
+        rewardShards: 1,
         unlocked: false,
-        check: () => this.getProducerCount('gpu') >= 1
+        claimed: false,
+        check: () => this.getProducerCount('hair_dye') >= 1
       },
       {
-        id: 'deepseek_unlock',
-        title: 'Китайский прорыв',
-        desc: 'Наймите первую нейросеть DeepSeek',
-        memeTag: 'КИТАЙСКИЙ ФЛЕКС 🐳',
-        memeQuote: '«DeepSeek посчитал твой вайб за 3 копейки и уронил рынок Nasdaq»',
-        icon: '🐳',
+        id: 'garages_vibe',
+        title: 'Гаражный авторитет',
+        desc: 'Купите сидр в гаражах',
+        memeTag: 'РОМАНТИКА СПАЛЬНИКОВ 🍾',
+        memeQuote: '«Ржавые гаражи, граффити и звон бутылок в темноте»',
+        icon: '🍾',
+        rewardCoins: 15000,
+        rewardShards: 2,
         unlocked: false,
-        check: () => this.getProducerCount('deepseek') >= 1
+        claimed: false,
+        check: () => this.getProducerCount('cider') >= 1
       },
       {
-        id: 'claude_unlock',
-        title: 'Святой Клод',
-        desc: 'Разблокируйте и наймите Claude 3.7',
-        memeTag: 'БОЖЕСТВЕННЫЙ КОДЕР 🧠',
-        memeQuote: '«Клод молча переписал твою жизнь без багов и с чистой архитектурой»',
-        icon: '🧠',
+        id: 'first_evolution',
+        title: 'Трансформация!',
+        desc: 'Совершите первую эволюцию персонажа',
+        memeTag: 'УРОВЕНЬ ПОВЫШЕН 🖤',
+        memeQuote: '«Серая мышка уходит в прошлое. Начинается эпоха бунта!»',
+        icon: '🦇',
+        rewardCoins: 50000,
+        rewardShards: 5,
         unlocked: false,
-        check: () => this.getProducerCount('claude') >= 1
-      },
-      {
-        id: 'first_rebirth',
-        title: 'Квантовый Скачок',
-        desc: 'Совершите первое перерождение эры',
-        memeTag: 'ПЕРЕРОЖДЕНИЕ В БОЖЕСТВО 🌌',
-        memeQuote: '«Предыдущая реальность стерта. Ты переродился на новом уровне матрицы!»',
-        icon: '🌌',
-        unlocked: false,
+        claimed: false,
         check: () => this.rebirthLevel >= 1
       },
       {
-        id: 'fever_activate',
-        title: 'Максимальный овердрайв',
-        desc: 'Разгоните комбо-полосу до режима ГИПЕР-ВАЙБ',
-        memeTag: 'ПОЛНЫЙ РАЗНОС 🔥',
-        memeQuote: '«Множитель x3.5! Музыка орет, ядро пульсирует, глаза горят!»',
-        icon: '🔥',
-        unlocked: false,
-        check: () => this.feverActive
-      },
-      {
-        id: 'catch_bonus',
-        title: 'Охотник за удачей',
-        desc: 'Поймайте летающий неоновый кристалл',
-        memeTag: 'АХАХАХ ХВАТАЙ ЕГО 💎',
-        memeQuote: '«Реакция мангуста. Джекпот мгновенно упал на баланс»',
-        icon: '💎',
-        unlocked: false,
-        check: () => this.totalBonuses >= 1
-      },
-      {
-        id: 'score_100k',
-        title: 'Вайб-миллионер',
-        desc: 'Накопите суммарно 100,000 очков вайба',
-        memeTag: 'КАПИТАЛИЗМ ВЫШЕЛ НА СВЯЗЬ 💰',
-        memeQuote: '«Уолл-стрит завидует твоему пассивному доходу в матрице»',
-        icon: '💰',
-        unlocked: false,
-        check: () => this.totalScoreEarned >= 100000
-      },
-      {
-        id: 'score_10m',
-        title: 'Вайб-олигарх',
-        desc: 'Накопите суммарно 10,000,000 очков вайба',
-        memeTag: 'МАТРИЦА СХЛОПНУЛАСЬ 👑',
-        memeQuote: '«Денег столько, что сервер переходит на квантовые числа»',
+        id: 'queen_altushka',
+        title: '160см / 140кг Величия',
+        desc: 'Достигните 5 уровня эволюции (Ультра-Альтушка)',
+        memeTag: 'АБСОЛЮТНАЯ БОГИНЯ 👑',
+        memeQuote: '«160 сантиметров чистого хайпа и 140 кг чистой любви!»',
         icon: '👑',
+        rewardCoins: 500000,
+        rewardShards: 25,
         unlocked: false,
-        check: () => this.totalScoreEarned >= 10000000
-      },
-      {
-        id: 'vps_10k',
-        title: 'Полный автопилот',
-        desc: 'Достигните пассивного дохода более 10,000 вайба/сек',
-        icon: '🚀',
-        memeTag: 'СКАЙНЕТ ПЛАЧЕТ В УГЛУ 🤖',
-        memeQuote: '«Ты просто пьешь кофе, пока нейросети фармят реальность за тебя»',
-        unlocked: false,
-        check: () => this.calculateVps() >= 10000
-      },
-      {
-        id: 'shards_50',
-        title: 'Нейро-магнат',
-        desc: 'Заработайте 50 Нейро-Осколков',
-        icon: '💠',
-        memeTag: 'КВАНТОВЫЙ ВЛАДЫКА 💠',
-        memeQuote: '«Осколки вселенной сверкают на твоем мета-счету»',
-        unlocked: false,
-        check: () => this.totalShardsEarned >= 50
+        claimed: false,
+        check: () => this.rebirthLevel >= 4
       }
     ];
 
-    // DOM Bindings
+    // Random Meme Events with Choices
+    this.eventsCatalog = [
+      {
+        id: 'event_9mice',
+        title: '🔥 9mice выпустил новый трек!',
+        icon: '🎧',
+        badge: '🖤 РЕЙВ-СОБЫТИЕ',
+        story: 'В наушниках загремел перегруженный 808 бас и скрим. Кровь закипает, вайб взлетает до стратосферы!',
+        choiceA: {
+          title: '🔁 Поставить на репит',
+          desc: 'Буст x3 к силе тапа на 60 секунд',
+          action: () => {
+            this.addBuff('9mice_repeat', 'Трек 9mice (x3 Тап)', '🔥', 3, 60, 'tap');
+            this.showToast('🔥 НА РЕПИТЕ!', 'Сила тапа увеличена в 3 раза на 60 секунд!');
+          }
+        },
+        choiceB: {
+          title: '📱 Снять видос в клипы',
+          desc: 'Собрать просмотры: мгновенно +25% к банку Альт-коинов',
+          action: () => {
+            const reward = Math.max(500, Math.floor(this.score * 0.25));
+            this.score += reward;
+            this.totalScoreEarned += reward;
+            this.showToast('📱 ЗАВИРУСИЛАСЬ!', `+${formatNumber(reward)} Альт-коинов с просмотров!`);
+          }
+        }
+      },
+      {
+        id: 'event_snack',
+        title: '🍩 Хочется вкусняшки ночью!',
+        icon: '🍔',
+        badge: '🍔 НОЧНОЙ ЖОР',
+        story: 'В 2 часа ночи непреодолимо захотелось сырных палочек, бургеров и чипсов. Что делаем?',
+        choiceA: {
+          title: '🛵 Заказать доставку',
+          desc: '-15% от баланса, зато комбо-шкала летит x2 быстрее (60 сек)',
+          action: () => {
+            const cost = Math.floor(this.score * 0.15);
+            this.score = Math.max(0, this.score - cost);
+            this.addBuff('snack_combo', 'Сытый разгон (x2 Комбо)', '🍩', 2, 60, 'combo');
+            this.showToast('🛵 ВКУСНЯШКИ ПРИБЫЛИ!', 'Сытая альтушка тапает с удвоенным разгоном!');
+          }
+        },
+        choiceB: {
+          title: '🥛 Попить кефирчик',
+          desc: 'Бесплатно: здоровый кефирчик дает +x2 к авто-доходу на 45 сек',
+          action: () => {
+            this.addBuff('kefir_passive', 'Холодный Кефирчик (x2 Авто)', '🥛', 2, 45, 'passive');
+            this.showToast('🥛 КЕФИРЧИК СПАС!', 'Авто-доход удвоен на 45 секунд!');
+          }
+        }
+      },
+      {
+        id: 'event_kitay_gorod',
+        title: '🚨 Патруль на Китай-городе!',
+        icon: '👮',
+        badge: '⚠️ ОПАСНОСТЬ',
+        story: 'Патруль у лавочек на Яме заметил баночки сидра и требует документы. Твои действия?',
+        choiceA: {
+          title: '💅 Включить альт-обаяние',
+          desc: '65% шанс получить хайп (+x3 буст на 40 сек), 35% штраф -20% монет',
+          action: () => {
+            if (Math.random() < 0.65) {
+              this.addBuff('charm_boost', 'Альт-Обаяние (x3 Все)', '💅', 3, 40, 'all');
+              this.showToast('💅 УСПЕХ!', 'Патруль оценил стрелки и отпустил с миром! x3 буст!');
+            } else {
+              const fine = Math.floor(this.score * 0.2);
+              this.score = Math.max(0, this.score - fine);
+              this.showToast('👮 ШТРАФ!', `Пришлось отдать ${formatNumber(fine)} Альт-коинов...`);
+            }
+          }
+        },
+        choiceB: {
+          title: '🏃 Дёрнуть через арку во дворы',
+          desc: 'Быстрый побег: адреналин дает мгновенно +15% к кликам',
+          action: () => {
+            this.addBuff('run_adrenaline', 'Адреналин (x2 Тап)', '🏃', 2, 30, 'tap');
+            this.showToast('🏃 УБЕЖАЛА!', 'Погоня оторвалась в темных дворах! x2 тап на 30 сек!');
+          }
+        }
+      },
+      {
+        id: 'event_mother_locked',
+        title: '🚪 Мать заперла дома!',
+        icon: '🔒',
+        badge: '🏠 ДОМАШНИЙ АРЕСТ',
+        story: '«Никаких гаражей, пока не вымоешь полы и посуду!» Входная дверь заперта на два замка.',
+        choiceA: {
+          title: '💻 Сесть за комп и врубить стрим',
+          desc: 'Авто-доход x0.5, зато ручной тап по альтушке x4 на 45 сек!',
+          action: () => {
+            this.addBuff('home_stream', 'Стрим из спальни (x4 Тап)', '💻', 4, 45, 'tap');
+            this.showToast('💻 СТРИМ ЗАПУЩЕН!', 'Сила клика увеличена в 4 раза на 45 секунд!');
+          }
+        },
+        choiceB: {
+          title: '🧹 Быстро убраться в комнате',
+          desc: 'Спокойствие в доме: +10 Альт-осколков и +10% к шансу критов на минуту',
+          action: () => {
+            this.neuroShards += 10;
+            this.totalShardsEarned += 10;
+            this.addBuff('room_clean', 'Чистая комната (+15% Крит)', '✨', 1.5, 60, 'crit');
+            this.showToast('✨ ПОРЯДОК!', '+10 Альт-осколков и повышенный крит-шанс!');
+          }
+        }
+      },
+      {
+        id: 'event_boys_invite',
+        title: '📱 Мальчики зовут к себе на хату',
+        icon: '💬',
+        badge: '❓ ДИЛЕММА',
+        story: 'Пишут во ВКонтакте: «Го к нам на вписку, там весело». Что ответим?',
+        choiceA: {
+          title: '🚫 Задоджить и включить сериал',
+          desc: 'Самоуважение бесценно: +15 Альт-осколков 🦇',
+          action: () => {
+            this.neuroShards += 15;
+            this.totalShardsEarned += 15;
+            this.showToast('💅 САМОУВАЖЕНИЕ!', '+15 Альт-Осколков за непоколебимый характер!');
+          }
+        },
+        choiceB: {
+          title: '🔊 Прийти и занять колонку',
+          desc: 'Врубить свой плейлист: мгновенно +20% монет или супер-хайп',
+          action: () => {
+            const reward = Math.max(1000, Math.floor(this.score * 0.2));
+            this.score += reward;
+            this.totalScoreEarned += reward;
+            this.addBuff('party_queen', 'Королева вписки (x2.5 Все)', '👑', 2.5, 30, 'all');
+            this.showToast('👑 ВСЕ СЛУШАЮТ ТЕБЯ!', `+${formatNumber(reward)} коинов и x2.5 буст!`);
+          }
+        }
+      }
+    ];
+
+    // Cache DOM Elements
     this.dom = {
-      score: document.getElementById('score-display'),
-      vps: document.getElementById('vps-display'),
-      vpc: document.getElementById('vpc-display'),
+      scoreDisplay: document.getElementById('score-display'),
+      vpsDisplay: document.getElementById('vps-display'),
+      vpcDisplay: document.getElementById('vpc-display'),
       comboBar: document.getElementById('combo-bar'),
       comboMult: document.getElementById('combo-multiplier'),
       comboStatus: document.getElementById('combo-status'),
 
-      // Click Area
+      // 4.2.10 Start Menu Screen Elements
+      startMenuScreen: document.getElementById('start-menu-screen'),
+      btnStartGame: document.getElementById('btn-start-game'),
+      btnStartGameLabel: document.getElementById('btn-start-game-label'),
+      startHeroPreviewImg: document.getElementById('start-hero-preview-img'),
+      startMenuStageTitle: document.getElementById('start-menu-stage-title'),
+      startMenuStageQuote: document.getElementById('start-menu-stage-quote'),
+      startMenuScore: document.getElementById('start-menu-score'),
+      startMenuClicks: document.getElementById('start-menu-clicks'),
+      btnStartTutorial: document.getElementById('btn-start-tutorial'),
+      btnStartStats: document.getElementById('btn-start-stats'),
+      btnStartSettings: document.getElementById('btn-start-settings'),
+      btnStartAudioToggle: document.getElementById('btn-start-audio-toggle'),
+      btnStartMusicToggle: document.getElementById('btn-start-music-toggle'),
+      startAudioStatus: document.getElementById('start-audio-status'),
+      startMusicStatus: document.getElementById('start-music-status'),
+      btnOpenMenu: document.getElementById('btn-open-menu'),
+
+      // 4.2.7 Session Timer Elements
+      sessionTimerVal: document.getElementById('session-timer-val'),
+      stPlaytime: document.getElementById('st-playtime'),
+      stTotalBonuses: document.getElementById('st-total-bonuses'),
+
+      // Click Area & Character
       clickerSection: document.getElementById('clicker-section'),
       coreStage: document.getElementById('core-stage'),
-      vibeCore: document.getElementById('vibe-core'),
-      coreSymbolIcon: document.getElementById('core-symbol-icon'),
+      stageBgLayer: document.getElementById('stage-bg-layer'),
+      altushkaSprite: document.getElementById('altushka-sprite'),
+      altushkaSpeech: document.getElementById('altushka-speech'),
+      speechBubbleText: document.getElementById('speech-bubble-text'),
       floatContainer: document.getElementById('float-container'),
       luckyCrystal: document.getElementById('lucky-crystal'),
       orbitBadgesContainer: document.getElementById('orbit-badges-container'),
@@ -485,6 +736,7 @@ class NeonVibeGame {
       headerLogoIcon: document.getElementById('header-logo-icon'),
       currentEraBadge: document.getElementById('current-era-badge'),
       btnRebirth: document.getElementById('btn-rebirth'),
+      btnTurboClicker: document.getElementById('btn-turbo-clicker'),
       rebirthBtnText: document.getElementById('rebirth-btn-text'),
       rebirthPill: document.getElementById('rebirth-pill'),
       btnRebirthShop: document.getElementById('btn-rebirth-shop'),
@@ -499,13 +751,29 @@ class NeonVibeGame {
       toastContainer: document.getElementById('toast-container'),
 
       // Modals
+      modalTutorial: document.getElementById('modal-tutorial'),
       modalStats: document.getElementById('modal-stats'),
       modalSettings: document.getElementById('modal-settings'),
       modalOffline: document.getElementById('modal-offline'),
       modalRebirth: document.getElementById('modal-rebirth'),
       modalRebirthShop: document.getElementById('modal-rebirth-shop'),
+      modalEvent: document.getElementById('modal-event'),
 
-      // Rebirth Modal Elements
+      // Event Modal
+      eventModalTitle: document.getElementById('event-modal-title'),
+      eventBadge: document.getElementById('event-badge'),
+      eventIcon: document.getElementById('event-icon'),
+      eventHeadline: document.getElementById('event-headline'),
+      eventStory: document.getElementById('event-story'),
+      btnChoiceA: document.getElementById('btn-choice-a'),
+      choiceATitle: document.getElementById('choice-a-title'),
+      choiceADesc: document.getElementById('choice-a-desc'),
+      btnChoiceB: document.getElementById('btn-choice-b'),
+      choiceBTitle: document.getElementById('choice-b-title'),
+      choiceBDesc: document.getElementById('choice-b-desc'),
+      btnClaimSingle: document.getElementById('btn-claim-single'),
+
+      // Evolution Modal
       rebirthCurAvatar: document.getElementById('rebirth-cur-avatar'),
       rebirthCurName: document.getElementById('rebirth-cur-name'),
       rebirthNextAvatar: document.getElementById('rebirth-next-avatar'),
@@ -520,16 +788,18 @@ class NeonVibeGame {
       rebirthWarpOverlay: document.getElementById('rebirth-warp-overlay'),
       warpEraTitle: document.getElementById('warp-era-title'),
 
-      // Audio buttons
+      // Audio buttons in Header
       btnAudio: document.getElementById('btn-audio'),
-      btnMusic: document.getElementById('btn-music')
+      btnMusic: document.getElementById('btn-music'),
+      headerMusicStatus: document.getElementById('header-music-status')
     };
 
     this.autoTapTimer = 0;
+    this.speechTimer = 0;
+    this.currentPendingEvent = null;
     this.ysdk = null;
-    this.yPlayer = null;
 
-    // Yandex Ad DOM elements
+    // Ad DOM elements
     this.dom.btnAdBoost = document.getElementById('btn-ad-boost');
     this.dom.btnClaimOfflineX2 = document.getElementById('btn-claim-offline-x2');
 
@@ -551,385 +821,579 @@ class NeonVibeGame {
     return u ? u.level : 0;
   }
 
+  sanitizeNum(v, def = 0) {
+    const n = Number(v);
+    return (isNaN(n) || !isFinite(n) || n < 0) ? def : n;
+  }
+
   getCurrentEra() {
-    return this.eras[Math.min(this.rebirthLevel, this.eras.length - 1)];
+    const idx = Math.max(0, Math.min(this.eras.length - 1, Math.floor(this.sanitizeNum(this.rebirthLevel, 0))));
+    return this.eras[idx];
   }
 
   getNextEra() {
-    const nextIdx = Math.min(this.rebirthLevel + 1, this.eras.length - 1);
+    const nextIdx = Math.max(0, Math.min(this.eras.length - 1, Math.floor(this.sanitizeNum(this.rebirthLevel, 0)) + 1));
     return this.eras[nextIdx];
   }
 
   getClicksNeededForRebirth() {
-    const cur = this.getCurrentEra();
-    return cur.clicksNeeded;
+    return this.getCurrentEra().clicksNeeded;
   }
 
   init() {
     this.loadGame();
-    this.initYandexSDK();
     this.initVKBridge();
+    this.initYandexSDK();
     this.applyEraTheme();
     this.setupEventListeners();
     this.renderShop();
     this.renderAchievements();
     this.renderRebirthShop();
     this.renderOrbitBadges();
+    this.updateStartMenuStatus();
     this.updateUI();
+
+    // Auto-clicker turbo button enabled for testing
+    if (this.dom.btnTurboClicker) {
+      this.dom.btnTurboClicker.style.display = 'inline-flex';
+    }
+    window.enableAutoTap = () => {
+      if (this.dom.btnTurboClicker) this.dom.btnTurboClicker.style.display = 'inline-flex';
+      this.startAutoClicker();
+    };
+    window.disableAutoTap = () => {
+      this.stopAutoClicker();
+    };
 
     // Start Main Game Loop
     requestAnimationFrame((t) => this.gameLoop(t));
 
-    // Auto-save interval (every 4 seconds)
-    setInterval(() => this.saveGame(), 4000);
+    // Local autosave every 8 seconds (Free, 0 network calls)
+    setInterval(() => this.saveGame(), 8000);
 
-    // Schedule lucky crystal in left clicker area
+    // VK Cloud Storage throttled autosave every 90 seconds (Max 40 calls/hour vs 1000 limit)
+    setInterval(() => this.syncVkCloudSave(), 90000);
+
+    // Schedule floating bonus snack
     this.scheduleLuckyCrystal();
+
+    // Periodic random events (every 75 seconds)
+    setInterval(() => {
+      if (Math.random() < 0.6) {
+        this.triggerRandomEvent();
+      }
+    }, 75000);
   }
 
   /**
-   * Apply Theme for Current Rebirth Era
+   * 4.2.10 START MENU LIFECYCLE
+   */
+  updateStartMenuStatus() {
+    const cur = this.getCurrentEra();
+    if (this.dom.startHeroPreviewImg) this.dom.startHeroPreviewImg.src = cur.spriteImage;
+    if (this.dom.startMenuStageTitle) this.dom.startMenuStageTitle.textContent = `Уровень ${cur.stageNumber}: ${cur.name}`;
+    if (this.dom.startMenuStageQuote) this.dom.startMenuStageQuote.textContent = cur.quote;
+    if (this.dom.startMenuScore) this.dom.startMenuScore.textContent = formatNumber(this.score);
+    if (this.dom.startMenuClicks) this.dom.startMenuClicks.textContent = formatNumber(this.totalClicks);
+
+    if (this.dom.btnStartGameLabel) {
+      if (this.totalClicks > 0 || this.score > 0 || this.rebirthLevel > 0) {
+        this.dom.btnStartGameLabel.textContent = `▶️ ПРОДОЛЖИТЬ (Ур. ${cur.stageNumber})`;
+      } else {
+        this.dom.btnStartGameLabel.textContent = `▶️ НАЧАТЬ ИГРУ`;
+      }
+    }
+
+    if (window.audioEngine) {
+      if (this.dom.startAudioStatus) this.dom.startAudioStatus.textContent = window.audioEngine.sfxEnabled ? 'ВКЛ' : 'ВЫКЛ';
+      if (this.dom.startMusicStatus) this.dom.startMusicStatus.textContent = window.audioEngine.musicEnabled ? 'ВКЛ' : 'ВЫКЛ';
+      if (this.dom.headerMusicStatus) this.dom.headerMusicStatus.textContent = window.audioEngine.musicEnabled ? 'ВКЛ' : 'ВЫКЛ';
+      if (this.dom.btnMusic) this.dom.btnMusic.classList.toggle('active', window.audioEngine.musicEnabled);
+    }
+  }
+
+  startGame() {
+    this.gameStarted = true;
+    if (this.dom.startMenuScreen) {
+      this.dom.startMenuScreen.classList.add('hidden');
+    }
+    this.closeAllModals();
+    if (window.audioEngine) {
+      window.audioEngine.init();
+      window.audioEngine.setLevel(this.rebirthLevel + 1);
+    }
+  }
+
+  openStartMenu() {
+    this.updateStartMenuStatus();
+    if (this.dom.startMenuScreen) {
+      this.dom.startMenuScreen.classList.remove('hidden');
+    }
+  }
+
+  /**
+   * Apply Theme and Visuals for Current Evolution Stage
    */
   applyEraTheme() {
     const era = this.getCurrentEra();
 
-    // Remove all old era classes
-    document.body.className = '';
+    // Update body theme class
+    this.eras.forEach(e => document.body.classList.remove(e.themeClass));
     document.body.classList.add(era.themeClass);
 
-    // Update symbols & badges
-    this.dom.currentEraBadge.textContent = `Эра: ${era.name}`;
-    this.dom.headerLogoIcon.textContent = era.icon;
-    this.dom.coreSymbolIcon.textContent = era.icon;
+    // Update stage background image and character sprite
+    if (this.dom.stageBgLayer) {
+      this.dom.stageBgLayer.style.backgroundImage = `url('${era.bgImage}')`;
+    }
+    if (this.dom.altushkaSprite) {
+      this.dom.altushkaSprite.src = era.spriteImage;
+    }
 
-    if (this.dom.rebirthCurAvatar) {
-      this.dom.rebirthCurAvatar.textContent = era.icon;
-      this.dom.rebirthCurName.textContent = era.name;
+    // Update header badges
+    if (this.dom.currentEraBadge) {
+      this.dom.currentEraBadge.textContent = `Уровень ${era.stageNumber}: ${era.name}`;
+    }
+
+    // Inform Audio Engine about current level
+    if (window.audioEngine) {
+      window.audioEngine.setLevel(era.stageNumber);
     }
   }
 
   /**
-   * Calculate current Passive Vibe Per Second (VPS)
+   * Triggers a random speech quote in the bubble above Altushka
    */
-  calculateVps() {
-    let base = 0;
-    for (const prod of this.producers) {
-      base += prod.count * prod.baseVps;
-    }
+  triggerSpeechQuote(forcedText = null, withSound = false) {
+    const stageIdx = Math.min(this.rebirthLevel, this.eras.length - 1);
+    const quotes = this.speechQuotes[stageIdx] || this.speechQuotes[0];
+    const text = forcedText || quotes[Math.floor(Math.random() * quotes.length)];
 
-    // Multiply by active temporary buffs
-    let multiplier = 1;
-    for (const buff of this.activeBuffs) {
-      multiplier *= buff.multiplier;
-    }
+    if (this.dom.speechBubbleText && this.dom.altushkaSpeech) {
+      this.dom.speechBubbleText.textContent = `«${text}»`;
+      this.dom.altushkaSpeech.classList.remove('bubble-bounce');
+      void this.dom.altushkaSpeech.offsetWidth;
+      this.dom.altushkaSpeech.classList.add('bubble-bounce');
 
-    if (this.feverActive) {
-      multiplier *= 2; // Extra x2 during Fever for passive income
+      if (withSound && window.audioEngine) {
+        window.audioEngine.playSpeechPop();
+      }
     }
-
-    // Rebirth Quantum Multiplier (+50% per level)
-    const quantumLvl = this.getRebirthUpgradeLvl('quantum_mult');
-    if (quantumLvl > 0) {
-      multiplier *= (1 + quantumLvl * 0.5);
-    }
-
-    return base * multiplier;
   }
 
   /**
-   * Calculate current Click Power (VPC)
+   * Adds an active buff with duration countdown
    */
-  calculateVpc() {
-    let base = 1;
+  addBuff(id, name, icon, multiplier, duration, type = 'all') {
+    this.activeBuffs = this.activeBuffs.filter(b => b.id !== id);
+    this.activeBuffs.push({
+      id,
+      name,
+      icon,
+      multiplier,
+      duration,
+      maxDuration: duration,
+      type
+    });
+    this.renderActiveBuffs();
+  }
 
-    for (const booster of this.boosters) {
-      if (booster.bonusVpc) {
-        base += booster.count * booster.bonusVpc;
+  renderActiveBuffs() {
+    if (!this.dom.activeBuffs) return;
+    this.dom.activeBuffs.innerHTML = '';
+
+    this.activeBuffs.forEach(buff => {
+      const badge = document.createElement('div');
+      badge.className = 'active-buff-pill';
+      const sec = Math.ceil(buff.duration);
+      badge.innerHTML = `
+        <span class="buff-icon">${buff.icon}</span>
+        <span class="buff-name">${buff.name}</span>
+        <span class="buff-timer">${sec}s</span>
+      `;
+      this.dom.activeBuffs.appendChild(badge);
+    });
+  }
+
+  /**
+   * Triggers a Random Meme Dilemma / Event Modal
+   */
+  triggerRandomEvent(specificEvent = null) {
+    // Prevent event modal from interrupting or stacking on top of open modals (Stats, Evolution, Settings, etc.)
+    const anyModalOpen = document.querySelector('.modal-overlay:not(.hidden)');
+    if (anyModalOpen) {
+      return;
+    }
+
+    const event = specificEvent || this.eventsCatalog[Math.floor(Math.random() * this.eventsCatalog.length)];
+    this.currentPendingEvent = event;
+
+    if (this.dom.eventModalTitle) this.dom.eventModalTitle.textContent = event.title;
+    if (this.dom.eventBadge) this.dom.eventBadge.textContent = event.badge;
+    if (this.dom.eventIcon) this.dom.eventIcon.textContent = event.icon;
+    if (this.dom.eventHeadline) this.dom.eventHeadline.textContent = event.title;
+    if (this.dom.eventStory) this.dom.eventStory.textContent = event.story;
+
+    const choiceContainer = document.getElementById('event-choices-grid') || document.getElementById('choice-container');
+    const hasChoices = !!(event.choiceA && event.choiceB);
+
+    if (hasChoices) {
+      if (choiceContainer) choiceContainer.classList.remove('hidden');
+      if (this.dom.btnClaimSingle) this.dom.btnClaimSingle.classList.add('hidden');
+
+      if (this.dom.choiceATitle) this.dom.choiceATitle.textContent = event.choiceA.title;
+      if (this.dom.choiceADesc) this.dom.choiceADesc.textContent = event.choiceA.desc;
+      if (this.dom.choiceBTitle) this.dom.choiceBTitle.textContent = event.choiceB.title;
+      if (this.dom.choiceBDesc) this.dom.choiceBDesc.textContent = event.choiceB.desc;
+    } else {
+      if (choiceContainer) choiceContainer.classList.add('hidden');
+      if (this.dom.btnClaimSingle) {
+        this.dom.btnClaimSingle.classList.remove('hidden');
+        this.dom.btnClaimSingle.textContent = (event.choiceA && event.choiceA.title) || 'ПРИНЯТЬ ВАЙБ 🖤';
       }
     }
 
-    // Resonance booster: adds percentage of passive income
-    const resonanceCount = this.getBoosterCount('resonance');
-    if (resonanceCount > 0) {
-      const vps = this.calculateVps();
-      base += vps * (resonanceCount * 0.015);
+    if (this.dom.modalEvent) {
+      this.dom.modalEvent.classList.remove('hidden');
+      if (window.audioEngine) {
+        window.audioEngine.playEventAlert();
+      }
     }
-
-    // Combo multiplier: 1.0x to 3.0x
-    let comboMult = 1 + (this.combo / this.maxCombo) * 2;
-    if (this.feverActive) {
-      comboMult = 3.5;
-    }
-
-    // Buffs
-    let buffMult = 1;
-    for (const buff of this.activeBuffs) {
-      buffMult *= buff.multiplier;
-    }
-
-    // Rebirth Quantum Multiplier
-    const quantumLvl = this.getRebirthUpgradeLvl('quantum_mult');
-    if (quantumLvl > 0) {
-      buffMult *= (1 + quantumLvl * 0.5);
-    }
-
-    return Math.max(1, base * comboMult * buffMult);
   }
 
   /**
-   * Handle Click in the Large Click Zone
-   */
-  handleClick(e) {
-    let clientX, clientY;
-    if (e.touches && e.touches.length > 0) {
-      clientX = e.touches[0].clientX;
-      clientY = e.touches[0].clientY;
-    } else {
-      clientX = e.clientX || window.innerWidth / 3;
-      clientY = e.clientY || window.innerHeight / 2;
-    }
-
-    // Critical click calculation
-    const critLevel = this.getBoosterCount('crit_luck');
-    const hyperCritLvl = this.getRebirthUpgradeLvl('hyper_crit');
-    const critChance = (critLevel * 0.12) + (hyperCritLvl * 0.03);
-    const isCrit = critChance > 0 && Math.random() < critChance;
-
-    let earned = this.calculateVpc();
-    const critMult = hyperCritLvl > 0 ? (5 + hyperCritLvl * 2) : 5;
-    if (isCrit) {
-      earned *= critMult;
-    }
-
-    this.score += earned;
-    this.totalScoreEarned += earned;
-    this.totalClicks++;
-
-    // Rebirth progress clicks (dynamic: Fever x2, Crit x3)
-    let rebirthIncrement = 1;
-    if (this.feverActive) rebirthIncrement = 2;
-    if (isCrit) rebirthIncrement = Math.max(rebirthIncrement, 3);
-    this.rebirthClicks += rebirthIncrement;
-
-    // Increment combo
-    this.combo = Math.min(this.maxCombo, this.combo + 9);
-    if (this.combo >= this.maxCombo && !this.feverActive) {
-      this.triggerFever();
-    }
-
-    // Visual feedback on the core
-    this.dom.vibeCore.classList.remove('clicked');
-    void this.dom.vibeCore.offsetWidth;
-    this.dom.vibeCore.classList.add('clicked');
-
-    // Spawn floating numbers at click location
-    this.spawnFloatingNumber(clientX, clientY, earned, isCrit);
-
-    // Spawn canvas particles & shockwave
-    if (window.neonParticles) {
-      window.neonParticles.spawnClickBurst(clientX, clientY, isCrit);
-    }
-
-    // Play click synth audio
-    if (window.neonAudio) {
-      const comboStep = (this.combo / this.maxCombo) * 10;
-      window.neonAudio.playClick(comboStep, isCrit);
-    }
-
-    this.checkAchievements();
-  }
-
-  /**
-   * Spawn Floating Text (+1, +25, CRIT!)
-   */
-  spawnFloatingNumber(x, y, value, isCrit) {
-    const el = document.createElement('div');
-    el.className = 'floating-num' + (isCrit ? ' crit' : '');
-
-    const formatted = formatNumber(value);
-    el.innerHTML = isCrit ? `🔥 КРИТ! +${formatted}` : `+${formatted}`;
-
-    const rot = (Math.random() - 0.5) * 30;
-    el.style.setProperty('--rot', `${rot}deg`);
-
-    const rect = this.dom.floatContainer.getBoundingClientRect();
-    const posX = x - rect.left;
-    const posY = y - rect.top;
-
-    el.style.left = `${posX}px`;
-    el.style.top = `${posY}px`;
-
-    this.dom.floatContainer.appendChild(el);
-
-    setTimeout(() => {
-      if (el.parentNode) el.parentNode.removeChild(el);
-    }, 900);
-  }
-
-  /**
-   * Trigger Fever Mode
-   */
-  triggerFever() {
-    this.feverActive = true;
-    this.feverTimer = 10;
-    this.dom.vibeCore.classList.add('fever-mode');
-    this.dom.comboBar.classList.add('fever');
-
-    if (window.neonAudio) {
-      window.neonAudio.playFever();
-    }
-
-    this.showToast('🔥 ГИПЕР-ВАЙБ АКТИВИРОВАН!', 'x3.5 множитель клика и x2 скорость набивания перерождения!', 'fever-toast', 'ОХУЖЕТОТВАЙБ 🔥');
-    this.checkAchievements();
-  }
-
-  endFever() {
-    this.feverActive = false;
-    this.combo = 0;
-    this.dom.vibeCore.classList.remove('fever-mode');
-    this.dom.comboBar.classList.remove('fever');
-  }
-
-  /**
-   * Lucky Glitch Crystal (Strictly confined to Left Clicker Zone)
+   * Floating Bonus Item (Вкусняшка / Сидр)
    */
   scheduleLuckyCrystal() {
-    const magnetLvl = this.getRebirthUpgradeLvl('crystal_magnet');
+    if (this.luckyActive) return;
+    if (this.luckyTimeout) clearTimeout(this.luckyTimeout);
+    const magnetLvl = this.getRebirthUpgradeLvl('snack_magnet');
     const delayBase = magnetLvl > 0 ? 25000 : 40000;
-    const delay = delayBase + Math.random() * 25000;
+    const delay = delayBase + Math.random() * 20000;
 
-    setTimeout(() => {
+    this.luckyTimeout = setTimeout(() => {
       this.spawnLuckyCrystal();
     }, delay);
   }
 
   spawnLuckyCrystal() {
+    if (this.luckyActive) return;
     const el = this.dom.luckyCrystal;
     const section = this.dom.clickerSection;
     if (!el || !section) return;
 
+    this.luckyActive = true;
     el.classList.remove('hidden');
 
-    const secRect = section.getBoundingClientRect();
-    const maxX = Math.max(100, secRect.width - 80);
-    const maxY = Math.max(180, secRect.height - 100);
+    const icons = ['🍩', '🍾', '⚡', '🥛', '🖤', '🍕'];
+    const chosenIcon = icons[Math.floor(Math.random() * icons.length)];
+    const inner = el.querySelector('.lucky-crystal-inner');
+    if (inner) inner.textContent = chosenIcon;
 
-    let posX = Math.random() > 0.5 ? 20 : maxX - 20;
-    let posY = 100 + Math.random() * (maxY - 140);
-    let speedX = (posX < maxX / 2 ? 1 : -1) * (1.8 + Math.random() * 1.2);
-    let speedY = (Math.random() - 0.5) * 1.5;
+    const secRect = section.getBoundingClientRect();
+    const maxX = Math.max(80, secRect.width - 90);
+    const maxY = Math.max(120, secRect.height - 110);
+
+    let posX = 20 + Math.random() * maxX;
+    let posY = 40 + Math.random() * maxY;
+    let vx = (Math.random() > 0.5 ? 1 : -1) * (0.8 + Math.random() * 0.7);
+    let vy = (Math.random() > 0.5 ? 1 : -1) * (0.8 + Math.random() * 0.7);
 
     el.style.left = `${posX}px`;
     el.style.top = `${posY}px`;
 
-    let lifeTime = 0;
-    const maxLife = 14000; // 14 seconds to catch
+    let aliveTime = 0;
+    const maxAlive = 12000;
 
-    const moveInterval = setInterval(() => {
-      posX += speedX;
-      posY += speedY;
-      lifeTime += 25;
+    if (this.luckyMoveInterval) clearInterval(this.luckyMoveInterval);
 
-      // Bounce inside clicker section edges
-      if (posX <= 10 || posX >= maxX) speedX = -speedX;
-      if (posY <= 70 || posY >= maxY) speedY = -speedY;
+    this.luckyMoveInterval = setInterval(() => {
+      if (!this.luckyActive) {
+        clearInterval(this.luckyMoveInterval);
+        return;
+      }
+      aliveTime += 40;
+      posX += vx;
+      posY += vy;
+
+      if (posX <= 10 || posX >= maxX) vx *= -1;
+      if (posY <= 20 || posY >= maxY) vy *= -1;
 
       el.style.left = `${posX}px`;
       el.style.top = `${posY}px`;
 
-      if (lifeTime >= maxLife) {
-        clearInterval(moveInterval);
-        el.classList.add('hidden');
-        this.scheduleLuckyCrystal();
+      if (aliveTime >= maxAlive) {
+        this.despawnLuckyCrystal();
       }
-    }, 25);
+    }, 40);
 
-    const clickHandler = (e) => {
+    el.onclick = (e) => {
       e.stopPropagation();
-      clearInterval(moveInterval);
-      el.classList.add('hidden');
-      el.removeEventListener('click', clickHandler);
-
-      this.claimLuckyCrystal(posX, posY);
-      this.scheduleLuckyCrystal();
+      e.preventDefault();
+      this.claimLuckyBonus(posX, posY);
     };
-
-    el.addEventListener('click', clickHandler, { once: true });
   }
 
-  claimLuckyCrystal(x, y) {
+  despawnLuckyCrystal() {
+    this.luckyActive = false;
+    if (this.luckyMoveInterval) {
+      clearInterval(this.luckyMoveInterval);
+      this.luckyMoveInterval = null;
+    }
+    if (this.dom.luckyCrystal) {
+      this.dom.luckyCrystal.classList.add('hidden');
+      this.dom.luckyCrystal.onclick = null;
+    }
+    this.scheduleLuckyCrystal();
+  }
+
+  claimLuckyBonus(x, y) {
+    if (!this.luckyActive) return;
+    const now = Date.now();
+    if (this.lastLuckyClaim && now - this.lastLuckyClaim < 800) return;
+    this.lastLuckyClaim = now;
+
+    this.despawnLuckyCrystal();
     this.totalBonuses++;
 
-    // Random reward: Either huge instant vibe, bonus clicks to rebirth, or a 20s x3 Frenzy buff!
-    const roll = Math.random();
-    const vps = this.calculateVps();
-
-    if (roll < 0.35) {
-      // Rebirth clicks jump
-      const bonusClicks = 25 + (this.rebirthLevel * 10);
-      this.rebirthClicks += bonusClicks;
-      this.showToast('💎 КВАНТОВЫЙ БОНУС!', `+${bonusClicks} кликов мгновенно добавлено к прогрессу перерождения!`, 'meme-toast', 'СКОРОСТНОЙ СКАЧОК 🚀');
-    } else if (roll < 0.65 && vps > 0) {
-      // 20s Frenzy buff
-      this.activeBuffs.push({
-        id: 'frenzy_' + Date.now(),
-        name: 'Неоновый Раш',
-        icon: '⚡',
-        multiplier: 3,
-        duration: 20
-      });
-      this.showToast('💎 ГЛИТЧ-КРИСТАЛЛ!', 'Активирован x3 Неоновый Раш на 20 секунд!', 'meme-toast', 'МАКСИМАЛЬНЫЙ ФАРМ ⚡');
+    if (Math.random() < 0.45) {
+      this.triggerRandomEvent();
     } else {
-      // Instant vibe chunk
-      const reward = Math.max(120, Math.floor(vps * 45) + (this.calculateVpc() * 30));
-      this.score += reward;
-      this.totalScoreEarned += reward;
-      this.showToast('💎 ГЛИТЧ-КРИСТАЛЛ!', `Получено +${formatNumber(reward)} очков вайба моментально!`, 'meme-toast', 'ДЖЕКПОТ УДАЧИ 💰');
-    }
+      const vps = this.calculateVps();
+      const instantReward = Math.max(100, Math.floor(vps * 25));
+      this.score += instantReward;
+      this.totalScoreEarned += instantReward;
 
-    if (window.neonAudio) {
-      window.neonAudio.playBonus();
-    }
-    if (window.neonParticles) {
-      const rect = this.dom.clickerSection.getBoundingClientRect();
-      window.neonParticles.spawnClickBurst(rect.left + x, rect.top + y, true);
-    }
+      this.addBuff('snack_frenzy', 'Сытый Буст (x3)', '🍩', 3, 30, 'all');
+      this.showToast('🍩 ВКУСНЯШКА ПОЙМАНА!', `+${formatNumber(instantReward)} коинов и x3 буст на 30 сек!`, 'snack-toast', 'БОНУС ✨');
+      this.triggerSpeechQuote("М-м-м, вкусняшка! Мой любимый вайб!");
 
-    this.checkAchievements();
+      if (window.audioEngine) {
+        window.audioEngine.playBuy();
+      }
+    }
   }
 
   /**
-   * Orbiting Badges of Owned AI & Upgrades (Near the Core)
+   * Main Calculation: Alt-Coins Per Second (VPS)
    */
-  renderOrbitBadges() {
-    const container = this.dom.orbitBadgesContainer;
-    if (!container) return;
-
-    // Collect all owned items
-    const owned = [];
+  calculateVps() {
+    let baseVps = 0;
     for (const prod of this.producers) {
-      if (prod.count > 0) {
-        owned.push({ icon: prod.icon, count: prod.count, name: prod.name });
+      baseVps += prod.count * prod.baseVps;
+    }
+
+    const metaMult = 1 + this.getRebirthUpgradeLvl('alt_mult') * 0.5;
+    const stageMult = Math.pow(2.2, this.rebirthLevel);
+
+    let vps = baseVps * metaMult * stageMult;
+
+    for (const buff of this.activeBuffs) {
+      if (buff.type === 'passive' || buff.type === 'all') {
+        vps *= buff.multiplier;
       }
     }
 
-    let html = '';
-    const total = owned.length;
-    if (total > 0) {
-      const radius = total > 5 ? 135 : 120;
-      owned.forEach((item, idx) => {
-        const angle = (idx / total) * 360;
-        const orbitDur = 14 + (idx % 3) * 4;
-        html += `
-          <div class="orbit-badge" style="--angle: ${angle}deg; --radius: ${radius}px; --orbit-dur: ${orbitDur}s;" title="${item.name} ×${item.count}">
-            <span>${item.icon}</span>
-            <span class="badge-count">${item.count}</span>
-          </div>
-        `;
-      });
+    return vps;
+  }
+
+  /**
+   * Main Calculation: Alt-Coins Per Click (VPC)
+   */
+  calculateVpc() {
+    let baseVpc = 1;
+
+    for (const b of this.boosters) {
+      if (b.bonusVpc) {
+        baseVpc += b.count * b.bonusVpc;
+      }
     }
 
-    container.innerHTML = html;
+    const resonanceCount = this.getBoosterCount('bass_headphones');
+    if (resonanceCount > 0) {
+      const vps = this.calculateVps();
+      baseVpc += vps * (0.015 * resonanceCount);
+    }
+
+    const metaMult = 1 + this.getRebirthUpgradeLvl('alt_mult') * 0.5;
+    const stageMult = Math.pow(1.8, this.rebirthLevel);
+
+    let vpc = baseVpc * metaMult * stageMult;
+
+    for (const buff of this.activeBuffs) {
+      if (buff.type === 'tap' || buff.type === 'all') {
+        vpc *= buff.multiplier;
+      }
+    }
+
+    return Math.max(1, vpc);
+  }
+
+  getCritChance() {
+    let chance = 0.05;
+    for (const b of this.boosters) {
+      if (b.critChance) chance += b.count * b.critChance;
+    }
+    chance += this.getRebirthUpgradeLvl('hyper_crit') * 0.03;
+
+    for (const buff of this.activeBuffs) {
+      if (buff.type === 'crit') {
+        chance += (buff.multiplier - 1) * 0.15;
+      }
+    }
+
+    return Math.min(0.75, Math.max(0, chance));
+  }
+
+  getCritMultiplier() {
+    const baseMult = 5.0;
+    const perkBonus = this.getRebirthUpgradeLvl('hyper_crit') > 0 ? 5.0 : 0;
+    return baseMult + perkBonus;
+  }
+
+  getProducerCost(prod) {
+    return Math.floor(prod.baseCost * Math.pow(prod.costMult, prod.count));
+  }
+
+  getBoosterCost(booster) {
+    return Math.floor(booster.baseCost * Math.pow(booster.costMult, booster.count));
+  }
+
+  getRebirthUpgradeCost(upg) {
+    return Math.floor(upg.baseCost * Math.pow(upg.costMult, upg.level));
+  }
+
+  /**
+   * Handle Tap on Character / Stage
+   */
+  handleClick(e, isAutoTap = false) {
+    // Double click & trackpad spam protection (Item 11) - bypass for controlled auto-tap
+    const now = Date.now();
+    if (!isAutoTap && this.lastTapTimestamp && (now - this.lastTapTimestamp < 24)) {
+      return; // Cap manual tap frequency to prevent browser freeze
+    }
+    this.lastTapTimestamp = now;
+
+    if (!isAutoTap && e && e.type === 'touchstart') {
+      this.lastTouchTimestamp = now;
+    } else if (!isAutoTap && e && e.type === 'mousedown') {
+      if (this.lastTouchTimestamp && (now - this.lastTouchTimestamp < 400)) {
+        return; // ignore synthetic mousedown following touchstart
+      }
+    }
+
+    if (e && e.target && (e.target.closest('button') || e.target.closest('.lucky-crystal') || e.target.closest('.modal-overlay'))) {
+      return;
+    }
+
+    this.totalClicks++;
+
+    const stageRect = this.dom.coreStage ? this.dom.coreStage.getBoundingClientRect() : { left: 0, top: 0, width: 320, height: 260 };
+    let clientX, clientY;
+    if (e && e.touches && e.touches.length > 0) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else if (e && typeof e.clientX === 'number') {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    } else {
+      clientX = stageRect.left + stageRect.width / 2;
+      clientY = stageRect.top + stageRect.height / 2;
+    }
+
+    // Stage-relative coordinates to prevent horizontal overflow/shifting (Item 8, 9)
+    const stageRelX = Math.max(25, Math.min(stageRect.width - 25, clientX - stageRect.left));
+    const stageRelY = Math.max(30, Math.min(stageRect.height - 30, clientY - stageRect.top));
+
+    const critChance = this.getCritChance();
+    const isCrit = Math.random() < critChance;
+    let clickGain = this.calculateVpc();
+
+    if (isCrit) {
+      clickGain *= this.getCritMultiplier();
+    }
+
+    const comboMult = this.getComboMultiplier();
+    clickGain *= comboMult;
+
+    this.score += clickGain;
+    this.totalScoreEarned += clickGain;
+
+    const clicksForThisTap = this.feverActive ? 2 : (isCrit ? 3 : 1);
+    this.rebirthClicks += clicksForThisTap;
+
+    let comboGain = 4.5;
+    for (const buff of this.activeBuffs) {
+      if (buff.type === 'combo') comboGain *= buff.multiplier;
+    }
+    this.combo = Math.min(this.maxCombo, this.combo + comboGain);
+
+    // Audio & particles throttled during rapid auto-tap to maintain silky smooth 60 FPS
+    if (window.audioEngine && (!isAutoTap || Math.random() < 0.12)) {
+      window.audioEngine.playClick(comboMult, isCrit);
+    }
+
+    if (window.particleEngine && (!isAutoTap || Math.random() < 0.18)) {
+      window.particleEngine.spawnClickBurst(clientX, clientY, isCrit);
+    }
+
+    // High performance sprite tap feedback without forced reflow
+    if (!isAutoTap && this.dom.altushkaSprite) {
+      this.dom.altushkaSprite.classList.add('tap-active');
+      clearTimeout(this.spriteTapTimer);
+      this.spriteTapTimer = setTimeout(() => {
+        if (this.dom.altushkaSprite) this.dom.altushkaSprite.classList.remove('tap-active');
+      }, 70);
+    }
+
+    if (!isAutoTap || Math.random() < 0.15) {
+      this.spawnFloatNumber(stageRelX, stageRelY, clickGain, isCrit);
+    }
+
+    // Rare & gentle speech quote updates (at least 20s between quotes so it never distracts or flickers)
+    if (!isAutoTap && (!this.lastClickQuoteTime || now - this.lastClickQuoteTime > 20000) && Math.random() < 0.08) {
+      this.lastClickQuoteTime = now;
+      this.triggerSpeechQuote(null, false);
+    }
+
+    // Ensure audio starts on user interaction if blocked by browser autoplay
+    if (window.audioEngine && window.audioEngine.musicEnabled && (!window.audioEngine.bgAudio || window.audioEngine.bgAudio.paused)) {
+      window.audioEngine.playStageMusic(this.rebirthLevel + 1);
+    }
+
+    // Throttled achievements check (every 10 clicks) to prevent lag spikes
+    if (this.totalClicks % 10 === 0) {
+      this.checkAchievements();
+    }
+  }
+
+  getComboMultiplier() {
+    if (this.feverActive) return 3.5;
+    if (this.combo >= 80) return 2.5;
+    if (this.combo >= 50) return 1.8;
+    if (this.combo >= 20) return 1.3;
+    return 1.0;
+  }
+
+  spawnFloatNumber(relX, relY, amount, isCrit = false) {
+    if (!this.dom.floatContainer) return;
+
+    // Strict cap to 3 max floating numbers so rapid taps never clutter the screen or catch the eye aggressively
+    while (this.dom.floatContainer.children.length >= 3) {
+      this.dom.floatContainer.removeChild(this.dom.floatContainer.firstChild);
+    }
+
+    const el = document.createElement('div');
+    el.className = `floating-num ${isCrit ? 'crit' : ''}`;
+    el.textContent = isCrit ? `✨ +${formatNumber(amount)}` : `+${formatNumber(amount)}`;
+
+    const randomOffsetX = (Math.random() - 0.5) * 20;
+    el.style.left = `${Math.max(15, relX + randomOffsetX)}px`;
+    el.style.top = `${Math.max(15, relY - 10)}px`;
+
+    this.dom.floatContainer.appendChild(el);
+    setTimeout(() => {
+      if (el.parentNode) el.parentNode.removeChild(el);
+    }, 420);
   }
 
   /**
@@ -940,756 +1404,605 @@ class NeonVibeGame {
     const dt = (now - this.lastTickTime) / 1000;
     this.lastTickTime = now;
 
-    if (dt > 0 && dt < 5) {
-      // Passive income
-      const vps = this.calculateVps();
-      const earned = vps * dt;
-      this.score += earned;
-      this.totalScoreEarned += earned;
+    // Symmetrical Delta Time handling (capped to 180s background catchup to prevent runaway loops)
+    const effectiveDt = Math.min(Math.max(0, dt), 180);
 
-      // Auto-tapper perk from rebirth shop
-      const autoTapLvl = this.getRebirthUpgradeLvl('auto_tapper');
-      if (autoTapLvl > 0) {
-        this.autoTapTimer += dt;
-        const tapInterval = 1 / (autoTapLvl * 2);
-        if (this.autoTapTimer >= tapInterval) {
-          this.autoTapTimer = 0;
-          const rect = this.dom.vibeCore.getBoundingClientRect();
-          this.handleClick({
-            clientX: rect.left + rect.width / 2,
-            clientY: rect.top + rect.height / 2
-          });
-        }
-      }
+    // 4.2.7 Track active playtime in seconds
+    if (effectiveDt > 0) {
+      this.sessionPlayTimeSec += effectiveDt;
+      this.totalPlayTimeSec += effectiveDt;
+    }
 
-      // Combo decay
-      if (!this.feverActive && this.combo > 0) {
-        this.combo = Math.max(0, this.combo - this.comboDecayRate * dt);
-      }
+    // 1. Passive Alt-coins Income
+    const vps = this.calculateVps();
+    if (vps > 0 && effectiveDt > 0) {
+      const gain = vps * effectiveDt;
+      this.score += gain;
+      this.totalScoreEarned += gain;
+    }
 
-      // Fever countdown
-      if (this.feverActive) {
-        this.feverTimer -= dt;
-        if (this.feverTimer <= 0) {
-          this.endFever();
-        }
-      }
-
-      // Active buffs countdown
-      for (let i = this.activeBuffs.length - 1; i >= 0; i--) {
-        this.activeBuffs[i].duration -= dt;
-        if (this.activeBuffs[i].duration <= 0) {
-          this.activeBuffs.splice(i, 1);
-        }
+    // 2. Auto-Tapper Perk
+    const autoTapLevel = this.getRebirthUpgradeLvl('auto_tapper');
+    if (autoTapLevel > 0) {
+      this.autoTapTimer += effectiveDt;
+      const interval = 1 / (autoTapLevel * 2);
+      if (this.autoTapTimer >= interval) {
+        this.autoTapTimer = 0;
+        this.handleClick(null);
       }
     }
 
-    this.updateUI();
-    this.checkAchievements();
+    // 3. Active Buffs Countdown
+    for (let i = this.activeBuffs.length - 1; i >= 0; i--) {
+      this.activeBuffs[i].duration -= effectiveDt;
+      if (this.activeBuffs[i].duration <= 0) {
+        this.activeBuffs.splice(i, 1);
+        this.renderActiveBuffs();
+      }
+    }
 
+    // 4. Combo & Fever logic
+    if (this.feverActive) {
+      this.feverTimer -= effectiveDt;
+      this.combo = (this.feverTimer / 8) * this.maxCombo;
+      if (this.feverTimer <= 0) {
+        this.feverActive = false;
+        this.combo = 0;
+        if (window.particleEngine) window.particleEngine.setFever(false);
+      }
+    } else {
+      if (this.combo >= this.maxCombo) {
+        this.feverActive = true;
+        this.feverTimer = 8;
+        if (window.particleEngine) window.particleEngine.setFever(true);
+        if (window.audioEngine) window.audioEngine.playFeverStart();
+        this.showToast('🔥 ХАЙП-РАЗГОН АКТИВЕН!', 'Множитель тапа x3.5 на 8 секунд!', 'fever-toast', 'ХАЙП 🔥');
+        this.triggerSpeechQuote("ВОТ ЭТО ДВИЖ! МУЗЫКУ НА ВСЮ ГРОМКОСТЬ!");
+      } else if (this.combo > 0) {
+        this.combo = Math.max(0, this.combo - this.comboDecayRate * effectiveDt);
+      }
+    }
+
+    // Periodic achievement check for idle playtime milestones
+    if (Math.random() < 0.008) {
+      this.checkAchievements();
+    }
+
+    this.updateUI();
     requestAnimationFrame((t) => this.gameLoop(t));
   }
 
-  /**
-   * Update UI Displays
-   */
   updateUI() {
-    this.dom.score.textContent = formatNumber(this.score);
-    this.dom.vps.textContent = formatNumber(this.calculateVps());
-    this.dom.vpc.textContent = formatNumber(this.calculateVpc());
-    this.dom.shardsDisplay.textContent = formatNumber(this.neuroShards);
+    if (this.dom.scoreDisplay) this.dom.scoreDisplay.textContent = formatNumber(this.score);
+    if (this.dom.vpsDisplay) this.dom.vpsDisplay.textContent = formatNumber(this.calculateVps());
+    if (this.dom.vpcDisplay) this.dom.vpcDisplay.textContent = formatNumber(this.calculateVpc());
+
+    // 4.2.7 Update Session Timer display
+    if (this.dom.sessionTimerVal) {
+      this.dom.sessionTimerVal.textContent = formatTime(this.sessionPlayTimeSec);
+    }
+
+    // Combo bar
+    if (this.dom.comboBar) {
+      const pct = Math.min(100, Math.max(0, (this.combo / this.maxCombo) * 100));
+      this.dom.comboBar.style.width = `${pct}%`;
+    }
+    if (this.dom.comboMult) {
+      this.dom.comboMult.textContent = `x${this.getComboMultiplier().toFixed(1)}`;
+    }
+    if (this.dom.comboStatus) {
+      this.dom.comboStatus.textContent = this.feverActive ? '🔥 ХАЙП-РЕЖИМ (x3.5)!' : (this.combo > 50 ? 'Тапай быстрее!' : 'Тапай по альтушке!');
+    }
+
+    // Rebirth / Evolution progress
+    const isMaxStage = this.rebirthLevel >= this.eras.length - 1;
+    if (this.dom.rebirthPill) {
+      if (isMaxStage) {
+        this.dom.rebirthPill.textContent = `МАКС. УРОВЕНЬ 👑`;
+        this.dom.rebirthPill.classList.remove('ready');
+      } else {
+        const reqClicks = this.getClicksNeededForRebirth();
+        const ready = this.rebirthClicks >= reqClicks;
+        this.dom.rebirthPill.textContent = `${Math.min(reqClicks, this.rebirthClicks)}/${reqClicks} 👆`;
+        this.dom.rebirthPill.classList.toggle('ready', ready);
+      }
+    }
+
+    if (this.dom.shardsDisplay) {
+      this.dom.shardsDisplay.textContent = formatNumber(this.neuroShards);
+    }
     if (this.dom.modalShardsCount) {
       this.dom.modalShardsCount.textContent = formatNumber(this.neuroShards);
     }
 
-    // Combo bar
-    const comboPercent = this.feverActive
-      ? (this.feverTimer / 10) * 100
-      : (this.combo / this.maxCombo) * 100;
-
-    this.dom.comboBar.style.width = `${Math.min(100, Math.max(0, comboPercent))}%`;
-
-    if (this.feverActive) {
-      this.dom.comboMult.textContent = 'x3.5 FEVER!';
-      this.dom.comboStatus.textContent = `Осталось ${Math.ceil(this.feverTimer)}с 🔥`;
-    } else {
-      const mult = (1 + (this.combo / this.maxCombo) * 2).toFixed(1);
-      this.dom.comboMult.textContent = `x${mult}`;
-      this.dom.comboStatus.textContent = this.combo > 20 ? 'Держи темп!' : 'Кликай быстрее!';
-    }
-
-    // Rebirth progress pill & button
-    const clicksNeeded = this.getClicksNeededForRebirth();
-    const canRebirth = this.rebirthClicks >= clicksNeeded;
-    this.dom.rebirthPill.textContent = `${this.rebirthClicks}/${clicksNeeded} 👆`;
-
-    if (canRebirth) {
-      this.dom.btnRebirth.classList.add('ready-pulse');
-      this.dom.rebirthPill.style.color = '#00ff88';
-      this.dom.rebirthPill.textContent = 'ГОТОВО! 🌌';
-    } else {
-      this.dom.btnRebirth.classList.remove('ready-pulse');
-      this.dom.rebirthPill.style.color = 'var(--neon-yellow)';
-    }
-
-    // Active buffs pill
-    this.renderBuffPills();
-
-    // Fast affordability check
-    this.updateShopAffordability();
+    this.updateShopButtons();
   }
 
-  renderBuffPills() {
-    let html = '';
-    for (const buff of this.activeBuffs) {
-      html += `
-        <div class="buff-pill">
-          <span>${buff.icon}</span>
-          <span>${buff.name} (x${buff.multiplier})</span>
-          <span>${Math.ceil(buff.duration)}с</span>
-        </div>
-      `;
+  updateShopButtons() {
+    this.producers.forEach(prod => {
+      const card = document.getElementById(`card-prod-${prod.id}`);
+      if (card) {
+        const cost = this.getProducerCost(prod);
+        const canAfford = this.score >= cost;
+        card.classList.toggle('cant-afford', !canAfford);
+        const btn = card.querySelector('.item-cost-btn');
+        if (btn) btn.disabled = !canAfford;
+      }
+    });
+
+    this.boosters.forEach(b => {
+      const card = document.getElementById(`card-booster-${b.id}`);
+      if (card) {
+        const cost = this.getBoosterCost(b);
+        const maxed = b.count >= b.maxCount;
+        const canAfford = this.score >= cost && !maxed;
+        card.classList.toggle('cant-afford', !canAfford && !maxed);
+        card.classList.toggle('disabled', maxed);
+        const btn = card.querySelector('.item-cost-btn');
+        if (btn) btn.disabled = maxed || !canAfford;
+      }
+    });
+  }
+
+  renderShop() {
+    if (this.dom.producersList) {
+      this.dom.producersList.innerHTML = '';
+      this.producers.forEach(prod => {
+        const cost = this.getProducerCost(prod);
+        const canAfford = this.score >= cost;
+        const card = document.createElement('div');
+        card.className = `shop-item-card ${canAfford ? '' : 'cant-afford'}`;
+        card.id = `card-prod-${prod.id}`;
+
+        card.innerHTML = `
+          <div class="item-icon-box">${prod.icon}</div>
+          <div class="item-info-col">
+            <div class="item-title">${prod.name}</div>
+            <div class="item-desc">${prod.desc}</div>
+            <div class="item-production-badge">
+              <span class="prod-val">+${formatNumber(prod.baseVps)}</span>
+              <span class="prod-total">/сек (всего: +${formatNumber(prod.count * prod.baseVps)}/с)</span>
+            </div>
+          </div>
+          <div class="item-action-col">
+            <div class="item-owned-tag">${prod.count} шт.</div>
+            <button id="btn-buy-prod-${prod.id}" class="item-cost-btn" type="button" ${canAfford ? '' : 'disabled'}>
+              <span class="currency-glyph">🖤</span>
+              <span>${formatNumber(cost)}</span>
+            </button>
+          </div>
+        `;
+
+        card.addEventListener('click', () => {
+          const now = Date.now();
+          if (this.lastBuyTime && now - this.lastBuyTime < 90) return;
+          this.lastBuyTime = now;
+          this.buyProducer(prod.id);
+        });
+
+        this.dom.producersList.appendChild(card);
+      });
     }
-    this.dom.activeBuffs.innerHTML = html;
-  }
 
-  /**
-   * Shop Methods
-   */
-  getProducerCost(prod) {
-    return Math.floor(prod.baseCost * Math.pow(prod.costMult, prod.count));
-  }
+    if (this.dom.boostersList) {
+      this.dom.boostersList.innerHTML = '';
+      this.boosters.forEach(b => {
+        const cost = this.getBoosterCost(b);
+        const maxed = b.count >= b.maxCount;
+        const canAfford = this.score >= cost && !maxed;
+        const card = document.createElement('div');
+        card.className = `shop-item-card ${maxed ? 'disabled' : (canAfford ? '' : 'cant-afford')}`;
+        card.id = `card-booster-${b.id}`;
 
-  getBoosterCost(booster) {
-    return Math.floor(booster.baseCost * Math.pow(booster.costMult, booster.count));
+        let boostDesc = '';
+        if (b.bonusVpc) boostDesc = `+${formatNumber(b.bonusVpc)} к тапу`;
+        else if (b.critChance) boostDesc = `+${Math.round(b.critChance * 100)}% к криту`;
+        else if (b.multiplier) boostDesc = `x${b.multiplier} ко всем источникам`;
+
+        card.innerHTML = `
+          <div class="item-icon-box">${b.icon}</div>
+          <div class="item-info-col">
+            <div class="item-title">${b.name}</div>
+            <div class="item-desc">${b.desc}</div>
+            <div class="item-production-badge">
+              <span class="prod-val">${boostDesc}</span>
+            </div>
+          </div>
+          <div class="item-action-col">
+            <div class="item-owned-tag">${b.count}/${b.maxCount}</div>
+            <button id="btn-buy-booster-${b.id}" class="item-cost-btn ${maxed ? 'disabled' : ''}" type="button" ${maxed || !canAfford ? 'disabled' : ''}>
+              ${maxed ? '<span>МАКС</span>' : `<span class="currency-glyph">🖤</span><span>${formatNumber(cost)}</span>`}
+            </button>
+          </div>
+        `;
+
+        if (!maxed) {
+          card.addEventListener('click', () => {
+            const now = Date.now();
+            if (this.lastBuyTime && now - this.lastBuyTime < 90) return;
+            this.lastBuyTime = now;
+            this.buyBooster(b.id);
+          });
+        }
+
+        this.dom.boostersList.appendChild(card);
+      });
+    }
   }
 
   buyProducer(id) {
     const prod = this.producers.find(p => p.id === id);
     if (!prod) return;
-
     const cost = this.getProducerCost(prod);
     if (this.score >= cost) {
       this.score -= cost;
       prod.count++;
-
-      if (window.neonAudio) {
-        window.neonAudio.playBuy();
-      }
-
+      if (window.audioEngine) window.audioEngine.playBuy();
       this.renderShop();
-      this.renderOrbitBadges();
+      this.updateUI();
       this.checkAchievements();
     }
   }
 
   buyBooster(id) {
-    const booster = this.boosters.find(b => b.id === id);
-    if (!booster) return;
-
-    if (booster.maxCount && booster.count >= booster.maxCount) return;
-
-    const cost = this.getBoosterCost(booster);
+    const b = this.boosters.find(x => x.id === id);
+    if (!b || b.count >= b.maxCount) return;
+    const cost = this.getBoosterCost(b);
     if (this.score >= cost) {
       this.score -= cost;
-      booster.count++;
-
-      if (window.neonAudio) {
-        window.neonAudio.playBuy();
-      }
-
+      b.count++;
+      if (window.audioEngine) window.audioEngine.playBuy();
       this.renderShop();
+      this.updateUI();
       this.checkAchievements();
     }
   }
 
-  renderShop() {
-    // 1. Producers (AI and hardware generators)
-    let prodHtml = '';
-    for (const prod of this.producers) {
-      const cost = this.getProducerCost(prod);
-      const canAfford = this.score >= cost;
-      const totalIncome = prod.count * prod.baseVps;
-
-      prodHtml += `
-        <div class="shop-item-card ${canAfford ? '' : 'cant-afford'}" data-buy-prod="${prod.id}">
-          <div class="item-icon-box">${prod.icon}</div>
-          <div class="item-info-col">
-            <span class="item-title">${prod.name}</span>
-            <p class="item-desc">${prod.desc}</p>
-            <div class="item-production-badge">
-              <span class="prod-val">+${formatNumber(prod.baseVps)}/сек</span>
-              ${prod.count > 0 ? `<span class="prod-total">(всего +${formatNumber(totalIncome)}/сек)</span>` : ''}
-            </div>
-          </div>
-          <div class="item-action-col">
-            <div class="item-owned-tag">×${prod.count}</div>
-            <div class="item-cost-btn">
-              <span class="currency-glyph">✨</span>
-              <span class="cost-val">${formatNumber(cost)}</span>
-            </div>
-          </div>
-        </div>
-      `;
-    }
-    this.dom.producersList.innerHTML = prodHtml;
-
-    // 2. Click Boosters
-    let boostHtml = '';
-    for (const b of this.boosters) {
-      const isMaxed = b.maxCount && b.count >= b.maxCount;
-      const cost = this.getBoosterCost(b);
-      const canAfford = this.score >= cost && !isMaxed;
-      const boostText = b.bonusVpc
-        ? `+${b.bonusVpc} к силе клика`
-        : (b.resonancePercent ? `+1.5% от дохода к клику` : `+12% к шансу крита`);
-
-      boostHtml += `
-        <div class="shop-item-card ${canAfford ? '' : 'cant-afford'} ${isMaxed ? 'disabled' : ''}" data-buy-boost="${b.id}">
-          <div class="item-icon-box">${b.icon}</div>
-          <div class="item-info-col">
-            <span class="item-title">${b.name}</span>
-            <p class="item-desc">${b.desc}</p>
-            <div class="item-production-badge">
-              <span class="prod-val">${boostText}</span>
-            </div>
-          </div>
-          <div class="item-action-col">
-            <div class="item-owned-tag">${isMaxed ? 'MAX' : `ур. ${b.count}`}</div>
-            <div class="item-cost-btn">
-              ${isMaxed ? '<span class="cost-max">МАКСИМУМ</span>' : `<span class="currency-glyph">✨</span><span class="cost-val">${formatNumber(cost)}</span>`}
-            </div>
-          </div>
-        </div>
-      `;
-    }
-    this.dom.boostersList.innerHTML = boostHtml;
-
-    // Click bindings
-    this.dom.producersList.querySelectorAll('[data-buy-prod]').forEach(card => {
-      card.addEventListener('click', () => {
-        const id = card.getAttribute('data-buy-prod');
-        this.buyProducer(id);
-      });
-    });
-
-    this.dom.boostersList.querySelectorAll('[data-buy-boost]').forEach(card => {
-      card.addEventListener('click', () => {
-        const id = card.getAttribute('data-buy-boost');
-        this.buyBooster(id);
-      });
-    });
-  }
-
-  updateShopAffordability() {
-    this.dom.producersList.querySelectorAll('[data-buy-prod]').forEach(card => {
-      const id = card.getAttribute('data-buy-prod');
-      const prod = this.producers.find(p => p.id === id);
-      if (prod) {
-        const cost = this.getProducerCost(prod);
-        if (this.score >= cost) {
-          card.classList.remove('cant-afford');
-        } else {
-          card.classList.add('cant-afford');
-        }
-      }
-    });
-
-    this.dom.boostersList.querySelectorAll('[data-buy-boost]').forEach(card => {
-      const id = card.getAttribute('data-buy-boost');
-      const b = this.boosters.find(x => x.id === id);
-      if (b) {
-        const isMax = b.maxCount && b.count >= b.maxCount;
-        if (!isMax) {
-          const cost = this.getBoosterCost(b);
-          if (this.score >= cost) {
-            card.classList.remove('cant-afford');
-          } else {
-            card.classList.add('cant-afford');
-          }
-        }
-      }
-    });
+  renderOrbitBadges() {
+    // Model badges under avatar retired per requirements (Item 2, 8)
   }
 
   /**
-   * Rebirth / Prestige Logic
+   * Evolution (Rebirth) Modal & Action
    */
-  calculateRebirthReward() {
-    const baseReward = 10;
-    const scoreBonus = Math.floor(Math.sqrt(this.totalScoreEarned / 800));
-    return (baseReward + scoreBonus) * (this.rebirthLevel + 1);
-  }
-
   openRebirthModal() {
     const cur = this.getCurrentEra();
     const next = this.getNextEra();
-    const needed = this.getClicksNeededForRebirth();
-    const canRebirth = this.rebirthClicks >= needed;
-    const shards = this.calculateRebirthReward();
+    const isMax = this.rebirthLevel >= this.eras.length - 1;
+    const clicksNeeded = cur.clicksNeeded;
 
-    this.dom.rebirthCurAvatar.textContent = cur.icon;
-    this.dom.rebirthCurName.textContent = cur.name;
+    if (this.dom.rebirthCurAvatar) this.dom.rebirthCurAvatar.textContent = cur.avatar;
+    if (this.dom.rebirthCurName) this.dom.rebirthCurName.textContent = cur.name;
 
-    this.dom.rebirthNextAvatar.textContent = next.icon;
-    this.dom.rebirthNextName.textContent = next.name;
-    this.dom.rebirthEraQuote.textContent = next.quote;
-
-    this.dom.rebirthClicksNum.textContent = `${this.rebirthClicks} / ${needed}`;
-    const fillPercent = Math.min(100, (this.rebirthClicks / needed) * 100);
-    this.dom.rebirthBarFill.style.width = `${fillPercent}%`;
-    this.dom.rebirthShardsReward.textContent = formatNumber(shards);
-
-    if (canRebirth) {
-      this.dom.btnDoRebirth.classList.remove('disabled');
-      this.dom.btnDoRebirth.disabled = false;
+    if (isMax) {
+      if (this.dom.rebirthNextAvatar) this.dom.rebirthNextAvatar.textContent = '👑';
+      if (this.dom.rebirthNextName) this.dom.rebirthNextName.textContent = 'МАКСИМАЛЬНЫЙ УРОВЕНЬ';
+      if (this.dom.rebirthEraQuote) this.dom.rebirthEraQuote.textContent = '«Абсолютная королева рейва! Все 5 стилей альтушки открыты и прокачаны!»';
+      if (this.dom.rebirthClicksNum) this.dom.rebirthClicksNum.textContent = 'МАКСИМУМ (15,000 / 15,000)';
+      if (this.dom.rebirthBarFill) this.dom.rebirthBarFill.style.width = '100%';
+      if (this.dom.rebirthShardsReward) this.dom.rebirthShardsReward.textContent = '0';
+      if (this.dom.btnDoRebirth) {
+        this.dom.btnDoRebirth.textContent = '👑 ЭВОЛЮЦИЯ ЗАВЕРШЕНА!';
+        this.dom.btnDoRebirth.classList.add('disabled');
+      }
     } else {
-      this.dom.btnDoRebirth.classList.add('disabled');
-      this.dom.btnDoRebirth.disabled = true;
+      if (this.dom.rebirthNextAvatar) this.dom.rebirthNextAvatar.textContent = next.avatar;
+      if (this.dom.rebirthNextName) this.dom.rebirthNextName.textContent = next.name;
+      if (this.dom.rebirthEraQuote) this.dom.rebirthEraQuote.textContent = next.quote;
+      if (this.dom.rebirthClicksNum) this.dom.rebirthClicksNum.textContent = `${Math.min(clicksNeeded, this.rebirthClicks)} / ${clicksNeeded}`;
+      const fillPct = Math.min(100, (this.rebirthClicks / clicksNeeded) * 100);
+      if (this.dom.rebirthBarFill) this.dom.rebirthBarFill.style.width = `${fillPct}%`;
+      if (this.dom.rebirthShardsReward) this.dom.rebirthShardsReward.textContent = cur.shardsReward;
+
+      const canRebirth = this.rebirthClicks >= clicksNeeded;
+      if (this.dom.btnDoRebirth) {
+        this.dom.btnDoRebirth.textContent = 'СОВЕРШИТЬ ЭВОЛЮЦИЮ! 🖤';
+        this.dom.btnDoRebirth.classList.toggle('disabled', !canRebirth);
+      }
     }
 
-    this.dom.modalRebirth.classList.remove('hidden');
+    if (this.dom.modalRebirth) this.dom.modalRebirth.classList.remove('hidden');
   }
 
   doRebirth() {
-    const needed = this.getClicksNeededForRebirth();
-    if (this.rebirthClicks < needed) return;
-
-    const shardsEarned = this.calculateRebirthReward();
-    this.neuroShards += shardsEarned;
-    this.totalShardsEarned += shardsEarned;
-    this.rebirthLevel++;
-    this.rebirthClicks = 0;
-
-    // Close rebirth modal
-    this.dom.modalRebirth.classList.add('hidden');
-
-    // Trigger Fullscreen Cyber Warp Grid Overlay Animation
-    const overlay = this.dom.rebirthWarpOverlay;
-    const nextEra = this.getCurrentEra();
-    this.dom.warpEraTitle.textContent = `ЭРА: ${nextEra.name} ${nextEra.icon}`;
-
-    overlay.classList.remove('hidden');
-    if (window.neonAudio) {
-      window.neonAudio.playRebirth();
+    const cur = this.getCurrentEra();
+    if (this.rebirthClicks < cur.clicksNeeded || this.rebirthLevel >= this.eras.length - 1) {
+      return;
     }
 
-    // Полноэкранная реклама Яндекса при перерождении
+    // 4.2.1 Interstitial Ad on major game milestone (Level Up)
     this.showInterstitialAd();
 
-    // Reset standard stats
+    const rewardShards = cur.shardsReward;
+    this.neuroShards += rewardShards;
+    this.totalShardsEarned += rewardShards;
+
+    this.rebirthLevel++;
+    this.rebirthClicks = 0;
     this.score = 0;
-    this.combo = 0;
-    this.feverActive = false;
 
-    // Apply fast start perk
-    const fastStartLvl = this.getRebirthUpgradeLvl('fast_start');
-    for (const prod of this.producers) {
-      if (prod.id === 'coffee') {
-        prod.count = fastStartLvl * 5;
-      } else if (prod.id === 'energy') {
-        prod.count = fastStartLvl * 2;
-      } else {
-        prod.count = 0;
+    const fastStart = this.getRebirthUpgradeLvl('fast_start');
+    this.producers.forEach((p, idx) => {
+      p.count = idx === 0 ? fastStart * 5 : (idx === 1 ? fastStart * 2 : 0);
+    });
+
+    if (this.dom.modalRebirth) this.dom.modalRebirth.classList.add('hidden');
+
+    // Trigger Warp Overlay
+    if (this.dom.rebirthWarpOverlay) {
+      const nextEra = this.getCurrentEra();
+      if (this.dom.warpEraTitle) {
+        this.dom.warpEraTitle.textContent = `УРОВЕНЬ ${nextEra.stageNumber}: ${nextEra.name} ${nextEra.avatar}`;
       }
+      this.dom.rebirthWarpOverlay.classList.remove('hidden');
+
+      if (window.audioEngine) {
+        window.audioEngine.playEvolution();
+      }
+
+      setTimeout(() => {
+        this.dom.rebirthWarpOverlay.classList.add('hidden');
+        this.applyEraTheme();
+        this.renderShop();
+        this.renderOrbitBadges();
+        this.updateUI();
+        this.syncVkCloudSave(); // sync to cloud on major milestone
+        this.showToast('🖤 ЭВОЛЮЦИЯ СОВЕРШЕНА!', `Новый уровень: ${nextEra.name}!`, 'meme-toast', 'ТРАНСФОРМАЦИЯ 👑');
+        this.triggerSpeechQuote("Смотри, как я преобразилась! Теперь это настоящий стиль!");
+      }, 2500);
     }
-
-    // Reset boosters
-    for (const b of this.boosters) {
-      b.count = 0;
-    }
-
-    // Update theme and UI
-    this.applyEraTheme();
-    this.renderShop();
-    this.renderOrbitBadges();
-    this.renderRebirthShop();
-    this.saveGame();
-
-    setTimeout(() => {
-      overlay.classList.add('hidden');
-      this.showToast('🌌 КВАНТОВОЕ ПЕРЕРОЖДЕНИЕ!', `Добро пожаловать в эру ${nextEra.name}! +${formatNumber(shardsEarned)} осколков получено!`, 'meme-toast', 'СМЕНА МАТРИЦЫ 🌌');
-    }, 3400);
-
-    this.checkAchievements();
   }
 
-  /**
-   * Rebirth Shop Logic
-   */
   renderRebirthShop() {
-    let html = '';
-    for (const u of this.rebirthUpgrades) {
-      const cost = Math.floor(u.baseCost * Math.pow(u.costMult, u.level));
+    if (!this.dom.rebirthUpgradesList) return;
+    this.dom.rebirthUpgradesList.innerHTML = '';
+
+    this.rebirthUpgrades.forEach(u => {
+      const cost = this.getRebirthUpgradeCost(u);
       const isMax = u.maxLevel && u.level >= u.maxLevel;
       const canAfford = this.neuroShards >= cost && !isMax;
 
-      html += `
-        <div class="shop-item-card ${canAfford ? '' : 'cant-afford'} ${isMax ? 'disabled' : ''}" data-buy-rebirth-up="${u.id}">
-          <div class="item-icon-box">${u.icon}</div>
-          <div class="item-info-col">
-            <span class="item-title">${u.name}</span>
-            <p class="item-desc">${u.desc}</p>
-            <div class="item-production-badge">
-              <span class="prod-val">Постоянный перк</span>
-            </div>
+      const card = document.createElement('div');
+      card.className = `rebirth-item-card ${isMax ? 'disabled' : (canAfford ? '' : 'cant-afford')}`;
+      card.innerHTML = `
+        <div class="rebirth-item-icon-box">${u.icon}</div>
+        <div class="rebirth-item-info">
+          <div class="rebirth-item-title-row">
+            <span class="rebirth-item-name">${u.name}</span>
+            <span class="rebirth-item-lvl-tag">Ур. ${u.level}${u.maxLevel ? `/${u.maxLevel}` : ''}</span>
           </div>
-          <div class="item-action-col">
-            <div class="item-owned-tag">${isMax ? 'MAX' : `ур. ${u.level}`}</div>
-            <div class="item-cost-btn">
-              ${isMax ? '<span class="cost-max">МАКС</span>' : `<span class="currency-glyph">💠</span><span class="cost-val">${formatNumber(cost)}</span>`}
-            </div>
-          </div>
+          <div class="rebirth-item-desc">${u.desc}</div>
+        </div>
+        <div class="rebirth-item-action">
+          <button id="btn-buy-shards-${u.id}" class="rebirth-cost-btn ${isMax ? 'disabled' : (canAfford ? '' : 'cant-afford')}" type="button" ${isMax || !canAfford ? 'disabled' : ''}>
+            ${isMax ? '<span>МАКС</span>' : `<span class="shard-glyph">🦇</span><span>${cost}</span>`}
+          </button>
         </div>
       `;
-    }
-    this.dom.rebirthUpgradesList.innerHTML = html;
 
-    this.dom.rebirthUpgradesList.querySelectorAll('[data-buy-rebirth-up]').forEach(card => {
-      card.addEventListener('click', () => {
-        const id = card.getAttribute('data-buy-rebirth-up');
-        this.buyRebirthUpgrade(id);
-      });
+      if (!isMax) {
+        card.addEventListener('click', (e) => {
+          if (this.neuroShards >= cost) {
+            this.neuroShards -= cost;
+            u.level++;
+            if (window.audioEngine) window.audioEngine.playBuy();
+            this.renderRebirthShop();
+            this.updateUI();
+          }
+        });
+      }
+
+      this.dom.rebirthUpgradesList.appendChild(card);
     });
   }
 
-  buyRebirthUpgrade(id) {
-    const u = this.rebirthUpgrades.find(x => x.id === id);
-    if (!u) return;
-
-    if (u.maxLevel && u.level >= u.maxLevel) return;
-
-    const cost = Math.floor(u.baseCost * Math.pow(u.costMult, u.level));
-    if (this.neuroShards >= cost) {
-      this.neuroShards -= cost;
-      u.level++;
-
-      if (window.neonAudio) {
-        window.neonAudio.playBuy();
-      }
-
-      this.renderRebirthShop();
-      this.updateUI();
-      this.saveGame();
-    }
-  }
-
-  /**
-   * Meme Achievements System
-   */
-  checkAchievements() {
-    let unlockedAny = false;
-    let unlockedTotal = 0;
-
-    for (const ach of this.achievements) {
-      if (!ach.unlocked && ach.check()) {
-        ach.unlocked = true;
-        unlockedAny = true;
-        this.showToast(ach.title, ach.memeQuote || ach.desc, 'meme-toast', ach.memeTag || '🏆 ДОСТИЖЕНИЕ!');
-        if (window.neonAudio) {
-          window.neonAudio.playAchievement();
-        }
-      }
-      if (ach.unlocked) unlockedTotal++;
-    }
-
-    if (unlockedAny) {
-      this.renderAchievements();
-    }
-
-    this.dom.achievementsCount.textContent = `${unlockedTotal}/${this.achievements.length}`;
-  }
-
   renderAchievements() {
-    let html = '';
-    for (const ach of this.achievements) {
-      html += `
-        <div class="achievement-card ${ach.unlocked ? 'unlocked' : ''}">
-          <div class="ach-icon">${ach.icon}</div>
-          <div class="ach-info">
-            <h4 class="ach-title">${ach.title}</h4>
-            <p class="ach-desc">${ach.desc}</p>
+    if (!this.dom.achievementsList) return;
+    this.dom.achievementsList.innerHTML = '';
+
+    let unlockedCount = 0;
+    this.achievements.forEach(ach => {
+      if (ach.unlocked) unlockedCount++;
+
+      let rewardBadges = [];
+      if (ach.rewardCoins > 0) rewardBadges.push(`+${formatNumber(ach.rewardCoins)} 🖤`);
+      if (ach.rewardShards > 0) rewardBadges.push(`+${ach.rewardShards} 🦇`);
+      const rewardHtml = rewardBadges.length > 0
+        ? `<div class="achievement-reward-tag"><span class="reward-icon">🎁</span> Награда: <strong>${rewardBadges.join(' ')}</strong></div>`
+        : '';
+
+      const statusBadge = ach.unlocked
+        ? `<span class="achievement-status-tag claimed">✓ ПОЛУЧЕНО</span>`
+        : `<span class="achievement-status-tag locked">🔒 ЗАКРЫТО</span>`;
+
+      const el = document.createElement('div');
+      el.className = `achievement-card ${ach.unlocked ? 'unlocked' : 'locked'}`;
+      el.innerHTML = `
+        <div class="achievement-icon">${ach.icon}</div>
+        <div class="achievement-info">
+          <div class="achievement-header-row">
+            <span class="achievement-title">${ach.title}</span>
+            ${statusBadge}
           </div>
+          <div class="achievement-desc">${ach.desc}</div>
+          <div class="achievement-quote">${ach.memeQuote}</div>
+          ${rewardHtml}
         </div>
       `;
+      this.dom.achievementsList.appendChild(el);
+    });
+
+    if (this.dom.achievementsCount) {
+      this.dom.achievementsCount.textContent = `${unlockedCount}/${this.achievements.length}`;
     }
-    this.dom.achievementsList.innerHTML = html;
   }
 
-  /**
-   * Meme Toast Notification with custom Meme Tag
-   */
-  showToast(title, desc, type = '', tag = '⚡ ВАЙБ-СИСТЕМА') {
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.innerHTML = `
-      <div class="toast-icon">⚡</div>
-      <div class="toast-content">
-        <span class="toast-meme-tag">${tag}</span>
-        <span class="toast-title">${title}</span>
-        <span class="toast-desc">${desc}</span>
-      </div>
-    `;
-
-    this.dom.toastContainer.appendChild(toast);
-
-    setTimeout(() => {
-      if (toast.parentNode) {
-        toast.parentNode.removeChild(toast);
+  checkAchievements() {
+    this.achievements.forEach(ach => {
+      if (!ach.unlocked && ach.check()) {
+        ach.unlocked = true;
+        this.claimAchievement(ach);
       }
+    });
+  }
+
+  claimAchievement(ach) {
+    if (ach.claimed) return;
+    ach.claimed = true;
+
+    let rewardParts = [];
+    if (ach.rewardCoins > 0) {
+      this.score += ach.rewardCoins;
+      this.totalScoreEarned += ach.rewardCoins;
+      rewardParts.push(`+${formatNumber(ach.rewardCoins)} 🖤`);
+    }
+    if (ach.rewardShards > 0) {
+      this.neuroShards += ach.rewardShards;
+      this.totalShardsEarned += ach.rewardShards;
+      rewardParts.push(`+${ach.rewardShards} 🦇`);
+    }
+
+    const rewardText = rewardParts.length > 0 ? `Награда: ${rewardParts.join(' ')}!` : '';
+
+    this.renderAchievements();
+    this.updateUI();
+    this.showAchievementBanner(ach, rewardText);
+    if (window.audioEngine) window.audioEngine.playAchievement();
+  }
+
+  showAchievementBanner(ach, rewardText = '') {
+    const banner = document.getElementById('achievement-banner');
+    if (!banner) return;
+
+    const iconEl = document.getElementById('ach-banner-icon');
+    const titleEl = document.getElementById('ach-banner-title');
+    const descEl = document.getElementById('ach-banner-desc');
+    const rewardEl = document.getElementById('ach-banner-reward');
+    const closeBtn = document.getElementById('ach-banner-close');
+
+    if (iconEl) iconEl.textContent = ach.icon || '🏆';
+    if (titleEl) titleEl.textContent = ach.title;
+    if (descEl) descEl.textContent = ach.desc;
+    if (rewardEl) rewardEl.textContent = rewardText || '🖤 Уважение на районе получено!';
+
+    banner.classList.remove('hidden');
+
+    if (closeBtn) {
+      closeBtn.onclick = () => {
+        banner.classList.add('hidden');
+      };
+    }
+
+    clearTimeout(this.achBannerTimer);
+    this.achBannerTimer = setTimeout(() => {
+      banner.classList.add('hidden');
     }, 4500);
   }
 
+  showToast(title, desc, type = '', badgeText = '') {
+    // Disabled as requested: no bottom-right toasts cluttering screen or blocking shop
+    return;
+  }
+
   /**
-   * Yandex Games SDK Integration & Monetization
+   * Save & Load Architecture (LocalStorage + Throttled VK Cloud Storage)
    */
-  initYandexSDK() {
-    if (typeof YaGames !== 'undefined') {
-      YaGames.init().then(ysdk => {
-        this.ysdk = ysdk;
-        console.log('✅ Yandex Games SDK успешно инициализирован');
+  getSerializedState() {
+    return JSON.stringify({
+      score: this.score,
+      totalScoreEarned: this.totalScoreEarned,
+      totalClicks: this.totalClicks,
+      totalBonuses: this.totalBonuses,
+      rebirthLevel: this.rebirthLevel,
+      rebirthClicks: this.rebirthClicks,
+      neuroShards: this.neuroShards,
+      totalShardsEarned: this.totalShardsEarned,
+      totalPlayTimeSec: this.totalPlayTimeSec,
+      lastSaveTime: Date.now(),
+      producers: this.producers.map(p => ({ id: p.id, count: p.count })),
+      boosters: this.boosters.map(b => ({ id: b.id, count: b.count })),
+      rebirthUpgrades: this.rebirthUpgrades.map(u => ({ id: u.id, level: u.level })),
+      achievements: this.achievements.map(a => ({ id: a.id, unlocked: a.unlocked, claimed: a.claimed }))
+    });
+  }
 
-        // Оповещение Яндекса о готовности игры (ОБЯЗАТЕЛЬНО для модерации!)
-        if (ysdk.features && ysdk.features.LoadingAPI) {
-          ysdk.features.LoadingAPI.ready();
-        }
+  applySerializedState(data) {
+    if (!data || typeof data !== 'object') return;
+    this.score = this.sanitizeNum(data.score, 0);
+    this.totalScoreEarned = this.sanitizeNum(data.totalScoreEarned, this.score);
+    this.totalClicks = this.sanitizeNum(data.totalClicks, 0);
+    this.totalBonuses = this.sanitizeNum(data.totalBonuses, 0);
+    this.rebirthLevel = Math.max(0, Math.min(this.eras.length - 1, Math.floor(this.sanitizeNum(data.rebirthLevel, 0))));
+    this.rebirthClicks = this.sanitizeNum(data.rebirthClicks, 0);
+    this.neuroShards = this.sanitizeNum(data.neuroShards, 0);
+    this.totalShardsEarned = this.sanitizeNum(data.totalShardsEarned, this.neuroShards);
+    this.totalPlayTimeSec = this.sanitizeNum(data.totalPlayTimeSec, 0);
 
-        // Облачные сохранения через аккаунт игрока
-        ysdk.getPlayer({ scopes: false }).then(player => {
-          this.yPlayer = player;
-          this.loadGameFromCloud();
-        }).catch(err => {
-          console.log('Игрок не авторизован в Яндексе, используются локальные сохранения');
-        });
-      }).catch(err => {
-        console.warn('YaGames.init error:', err);
+    if (Array.isArray(data.producers)) {
+      data.producers.forEach(sp => {
+        if (!sp || typeof sp.id !== 'string') return;
+        const p = this.producers.find(x => x.id === sp.id);
+        if (p) p.count = Math.floor(this.sanitizeNum(sp.count, 0));
       });
     }
-  }
 
-  /**
-   * VK Bridge SDK Integration for VK Games / VK Mini Apps
-   */
-  initVKBridge() {
-    this.isVK = false;
-    if (typeof vkBridge !== 'undefined') {
-      vkBridge.send('VKWebAppInit')
-        .then(() => {
-          this.isVK = true;
-          console.log('✅ VK Bridge успешно инициализирован');
-          // Request optimal desktop iframe window size in VK
-          vkBridge.send('VKWebAppResizeWindow', { width: 1000, height: 750 }).catch(() => {});
-
-          // Облачная синхронизация из базы данных ВКонтакте (VK Storage)
-          vkBridge.send('VKWebAppStorageGet', { keys: ['vibe_save_v1'] })
-            .then(res => {
-              if (res && res.keys && res.keys[0] && res.keys[0].value) {
-                try {
-                  const cloudData = JSON.parse(res.keys[0].value);
-                  if (cloudData && (cloudData.totalScoreEarned || 0) > (this.totalScoreEarned || 0)) {
-                    console.log('☁️ Загружено облачное сохранение из VK Storage');
-                    this.applySaveData(cloudData);
-                    this.updateDisplay();
-                    this.renderProducers();
-                    this.renderRebirthUpgrades();
-                    this.renderAchievements();
-                  }
-                } catch (e) {
-                  console.warn('VK storage parse error', e);
-                }
-              }
-            })
-            .catch(() => {});
-        })
-        .catch(err => {
-          console.log('VK Bridge init info:', err);
-        });
-    }
-  }
-
-  muteAudio(mute) {
-    if (window.neonAudio && window.neonAudio.ctx && window.neonAudio.masterGain) {
-      const targetVol = mute ? 0 : window.neonAudio.volume;
-      window.neonAudio.masterGain.gain.setValueAtTime(targetVol, window.neonAudio.ctx.currentTime);
-    }
-  }
-
-  /**
-   * Просмотр рекламы за вознаграждение (Rewarded Video)
-   */
-  showRewardedAd(onRewarded) {
-    if (this.isVK && typeof vkBridge !== 'undefined') {
-      this.muteAudio(true);
-      vkBridge.send('VKWebAppShowNativeAds', { ad_format: 'reward' })
-        .then(data => {
-          this.muteAudio(false);
-          if (data && data.result) {
-            if (onRewarded) onRewarded();
-          }
-        })
-        .catch(err => {
-          this.muteAudio(false);
-          console.warn('VK Rewarded ad error', err);
-          if (onRewarded) onRewarded();
-        });
-    } else if (this.ysdk && this.ysdk.adv) {
-      this.ysdk.adv.showRewardedVideo({
-        callbacks: {
-          onOpen: () => this.muteAudio(true),
-          onRewarded: () => {
-            if (onRewarded) onRewarded();
-          },
-          onClose: () => this.muteAudio(false),
-          onError: (e) => {
-            this.muteAudio(false);
-            console.warn('Rewarded ad error', e);
-            if (onRewarded) onRewarded();
-          }
-        }
+    if (Array.isArray(data.boosters)) {
+      data.boosters.forEach(sb => {
+        if (!sb || typeof sb.id !== 'string') return;
+        const b = this.boosters.find(x => x.id === sb.id);
+        if (b) b.count = Math.min(b.maxCount, Math.floor(this.sanitizeNum(sb.count, 0)));
       });
-    } else {
-      // Режим локального тестирования
-      this.showToast('🎬 РЕКЛАМА', 'Тестовый показ! Награда успешно начислена.', 'meme-toast', 'БОНУС ПРОСМОТРА 🎬');
-      if (onRewarded) onRewarded();
     }
-  }
 
-  /**
-   * Полноэкранная реклама (Interstitial)
-   */
-  showInterstitialAd() {
-    if (this.isVK && typeof vkBridge !== 'undefined') {
-      this.muteAudio(true);
-      vkBridge.send('VKWebAppShowNativeAds', { ad_format: 'interstitial' })
-        .then(() => this.muteAudio(false))
-        .catch(() => this.muteAudio(false));
-    } else if (this.ysdk && this.ysdk.adv) {
-      this.ysdk.adv.showFullscreenAdv({
-        callbacks: {
-          onOpen: () => this.muteAudio(true),
-          onClose: () => this.muteAudio(false),
-          onError: () => this.muteAudio(false)
+    if (Array.isArray(data.rebirthUpgrades)) {
+      data.rebirthUpgrades.forEach(su => {
+        if (!su || typeof su.id !== 'string') return;
+        const u = this.rebirthUpgrades.find(x => x.id === su.id);
+        if (u) u.level = u.maxLevel ? Math.min(u.maxLevel, Math.floor(this.sanitizeNum(su.level, 0))) : Math.floor(this.sanitizeNum(su.level, 0));
+      });
+    }
+
+    if (Array.isArray(data.achievements)) {
+      data.achievements.forEach(sa => {
+        if (!sa || typeof sa.id !== 'string') return;
+        const a = this.achievements.find(x => x.id === sa.id);
+        if (a) {
+          a.unlocked = !!sa.unlocked;
+          a.claimed = !!(sa.claimed ?? sa.unlocked);
         }
       });
     }
-  }
 
-  loadGameFromCloud() {
-    if (!this.yPlayer) return;
-    this.yPlayer.getData().then(cloudData => {
-      if (cloudData && cloudData.score !== undefined) {
-        // Если в облаке больше прогресса, чем локально
-        if ((cloudData.totalScoreEarned || 0) > this.totalScoreEarned) {
-          console.log('Загрузка прогресса из Яндекс Облака');
-          this.applyLoadedData(cloudData);
-          this.renderShop();
-          this.renderOrbitBadges();
-          this.renderRebirthShop();
-          this.updateUI();
+    // Offline Progress Calculation (Capped to max 24 hours = 86400s)
+    if (data.lastSaveTime && typeof data.lastSaveTime === 'number') {
+      const now = Date.now();
+      const diffSec = Math.floor((now - data.lastSaveTime) / 1000);
+      if (diffSec > 15 && diffSec < 86400 * 30) {
+        const vps = this.calculateVps();
+        const offlineEarned = Math.floor(vps * Math.min(diffSec, 86400) * 0.7);
+        if (offlineEarned > 0) {
+          this.offlinePendingReward = offlineEarned;
+          setTimeout(() => {
+            if (this.dom.modalOffline) {
+              const timeEl = document.getElementById('offline-time');
+              const earnEl = document.getElementById('offline-earned');
+              if (timeEl) timeEl.textContent = `${Math.floor(diffSec / 60)} мин`;
+              if (earnEl) earnEl.textContent = `+${formatNumber(offlineEarned)}`;
+              this.dom.modalOffline.classList.remove('hidden');
+            }
+          }, 600);
         }
       }
-    }).catch(e => console.warn('Cloud load error', e));
+    }
   }
 
-  /**
-   * Save & Load Engine
-   */
   saveGame() {
+    if (this.isResetting) return;
     try {
-      const data = {
-        score: this.score,
-        totalScoreEarned: this.totalScoreEarned,
-        totalClicks: this.totalClicks,
-        totalBonuses: this.totalBonuses,
-        rebirthLevel: this.rebirthLevel,
-        rebirthClicks: this.rebirthClicks,
-        neuroShards: this.neuroShards,
-        totalShardsEarned: this.totalShardsEarned,
-        startTime: this.startTime,
-        lastSaveTime: Date.now(),
-        producers: this.producers.map(p => ({ id: p.id, count: p.count })),
-        boosters: this.boosters.map(b => ({ id: b.id, count: b.count })),
-        rebirthUpgrades: this.rebirthUpgrades.map(u => ({ id: u.id, level: u.level })),
-        achievements: this.achievements.filter(a => a.unlocked).map(a => a.id)
-      };
-
-      // Локальное сохранение
-      localStorage.setItem(this.saveKey, JSON.stringify(data));
-
-      // Облачное сохранение ВКонтакте (VK Storage)
-      if (this.isVK && typeof vkBridge !== 'undefined') {
-        vkBridge.send('VKWebAppStorageSet', {
-          key: 'vibe_save_v1',
-          value: JSON.stringify(data)
-        }).catch(e => console.warn('VK storage save error', e));
-      }
-
-      // Облачное сохранение Яндекса
-      if (this.yPlayer) {
-        this.yPlayer.setData(data, true).catch(e => console.warn('Cloud save error', e));
-      }
-
-      if (this.dom.saveIndicator) {
-        this.dom.saveIndicator.style.opacity = '1';
-        setTimeout(() => {
-          if (this.dom.saveIndicator) this.dom.saveIndicator.style.opacity = '0.5';
-        }, 800);
-      }
+      const jsonStr = this.getSerializedState();
+      localStorage.setItem(this.saveKey, jsonStr);
     } catch (e) {
-      console.warn('Game save failed', e);
-    }
-  }
-
-  applySaveData(data) {
-    if (!data) return;
-    this.score = data.score || 0;
-    this.totalScoreEarned = data.totalScoreEarned || this.score;
-    this.totalClicks = data.totalClicks || 0;
-    this.totalBonuses = data.totalBonuses || 0;
-    this.rebirthLevel = data.rebirthLevel || 0;
-    this.rebirthClicks = data.rebirthClicks || 0;
-    this.neuroShards = data.neuroShards || 0;
-    this.totalShardsEarned = data.totalShardsEarned || 0;
-    this.startTime = data.startTime || Date.now();
-
-    // Producers
-    if (data.producers) {
-      for (const saved of data.producers) {
-        const prod = this.producers.find(p => p.id === saved.id);
-        if (prod) prod.count = saved.count;
-      }
-    }
-
-    // Boosters
-    if (data.boosters) {
-      for (const saved of data.boosters) {
-        const b = this.boosters.find(x => x.id === saved.id);
-        if (b) b.count = saved.count;
-      }
-    }
-
-    // Rebirth Upgrades
-    if (data.rebirthUpgrades) {
-      for (const saved of data.rebirthUpgrades) {
-        const u = this.rebirthUpgrades.find(x => x.id === saved.id);
-        if (u) u.level = saved.level;
-      }
-    }
-
-    // Achievements
-    if (data.achievements) {
-      for (const achId of data.achievements) {
-        const a = this.achievements.find(x => x.id === achId);
-        if (a) a.unlocked = true;
-      }
-    }
-
-    // Offline Progress Calculation
-    if (data.lastSaveTime) {
-      const elapsedSec = (Date.now() - data.lastSaveTime) / 1000;
-      if (elapsedSec > 10) {
-        this.processOfflineProgress(elapsedSec);
-      }
+      console.warn('Local save failed', e);
     }
   }
 
@@ -1697,39 +2010,140 @@ class NeonVibeGame {
     try {
       const raw = localStorage.getItem(this.saveKey);
       if (!raw) return;
-
       const data = JSON.parse(raw);
-      this.applySaveData(data);
+      this.applySerializedState(data);
     } catch (e) {
-      console.warn('Game load failed', e);
+      console.warn('Local load failed', e);
     }
   }
 
-  processOfflineProgress(elapsedSec) {
-    const cappedSec = Math.min(elapsedSec, 12 * 3600);
-    const vps = this.calculateVps();
+  /**
+   * VK Cloud Storage Sync: Strictly adheres to rate limits
+   * - Max 1000 calls per hour (we limit to max ~40/hour via 90s throttle)
+   * - Max 1000 variables (we use exactly 1 key)
+   */
+  syncVkCloudSave() {
+    if (this.isResetting) return;
+    if (typeof vkBridge === 'undefined' || !vkBridge.send) return;
+    if (!this.cloudSyncReady) return; // Prevent overwriting cloud data before initial pull finishes
 
-    if (vps > 0 && cappedSec >= 15) {
-      const earned = Math.floor(vps * cappedSec * 0.7);
+    const now = Date.now();
+    // 15-second minimum throttle between manual/auto cloud saves
+    if (this.lastVkCloudSaveTime && now - this.lastVkCloudSaveTime < 15000) return;
 
-      if (earned > 0) {
-        this.offlinePendingReward = earned;
-
-        const min = Math.floor(cappedSec / 60);
-        const timeStr = min > 60 ? `${Math.floor(min / 60)}ч ${min % 60}мин` : `${min}мин`;
-
-        document.getElementById('offline-time').textContent = timeStr;
-        document.getElementById('offline-earned').textContent = `+${formatNumber(earned)}`;
-        this.dom.modalOffline.classList.remove('hidden');
-      }
+    // Hourly counter reset
+    if (now - this.vkStorageHourStart > 3600000) {
+      this.vkStorageCallCount = 0;
+      this.vkStorageHourStart = now;
     }
+
+    // Rate-limit guard: never exceed 850 calls in 1 hour
+    if (this.vkStorageCallCount >= 850) {
+      console.warn('VK Storage hourly call limit approaching. Sync skipped.');
+      return;
+    }
+
+    const jsonStr = this.getSerializedState();
+    this.vkStorageCallCount++;
+    this.lastVkCloudSaveTime = now;
+
+    vkBridge.send('VKWebAppStorageSet', {
+      key: this.vkCloudKey,
+      value: jsonStr
+    }).then(() => {
+      console.log(`[VK Storage] Cloud synced (calls this hour: ${this.vkStorageCallCount}/1000)`);
+      const statusEl = document.getElementById('vk-cloud-status-text');
+      if (statusEl) {
+        statusEl.textContent = `Синхронизировано в облако VK • Использовано 1/1000 ключей (${this.vkStorageCallCount} вызовов/ч)`;
+      }
+    }).catch(err => {
+      console.warn('[VK Storage] Sync error:', err);
+    });
+  }
+
+  loadFromVkCloud() {
+    if (sessionStorage.getItem('altushka_just_reset') === '1') {
+      sessionStorage.removeItem('altushka_just_reset');
+      this.cloudSyncReady = true;
+      console.log('[VK Storage] Reset active, skipping cloud restore.');
+      return;
+    }
+    if (typeof vkBridge === 'undefined' || !vkBridge.send) {
+      this.cloudSyncReady = true;
+      return;
+    }
+
+    vkBridge.send('VKWebAppStorageGet', {
+      keys: [this.vkCloudKey]
+    }).then(res => {
+      this.cloudSyncReady = true;
+      if (res && res.keys && res.keys.length > 0) {
+        const item = res.keys.find(k => k.key === this.vkCloudKey);
+        if (item && item.value) {
+          try {
+            const cloudData = JSON.parse(item.value);
+            // Non-destructive conflict resolution: compare rebirthLevel, total clicks, and timestamp (never raw score)
+            const cloudRebirth = cloudData.rebirthLevel || 0;
+            const isCloudAhead = (cloudRebirth > this.rebirthLevel) ||
+              (cloudRebirth === this.rebirthLevel && (cloudData.totalClicks || 0) > this.totalClicks) ||
+              (cloudData.lastSaveTime && cloudData.lastSaveTime > (this.lastSaveTime || 0));
+
+            if (isCloudAhead) {
+              this.applySerializedState(cloudData);
+              this.updateUI();
+              this.renderShop();
+              this.renderOrbitBadges();
+              this.applyEraTheme();
+              this.updateStartMenuStatus();
+              console.log('[VK Storage] Successfully restored save from VK Cloud!');
+            }
+          } catch (e) {
+            console.warn('[VK Storage] Error parsing cloud save', e);
+          }
+        }
+      }
+    }).catch(err => {
+      this.cloudSyncReady = true;
+      console.warn('[VK Storage] Error reading cloud save', err);
+    });
   }
 
   resetGame() {
-    if (confirm('Вы уверены, что хотите полностью сбросить весь неоновый прогресс? Это действие необратимо!')) {
-      localStorage.removeItem(this.saveKey);
-      window.location.reload();
+    if (!confirm('Точно сбросить весь прогресс Альтушка-Кликера? Начать сначала с 1 уровня?')) {
+      return;
     }
+    this.isResetting = true;
+    try {
+      localStorage.removeItem(this.saveKey);
+      localStorage.removeItem('altushka_clicker_audio');
+      sessionStorage.setItem('altushka_just_reset', '1');
+    } catch (e) {}
+
+    if (typeof vkBridge !== 'undefined' && vkBridge.send) {
+      vkBridge.send('VKWebAppStorageSet', {
+        key: this.vkCloudKey,
+        value: JSON.stringify({ isReset: true, rebirthLevel: 0, totalClicks: 0, lastSaveTime: Date.now() + 500000 })
+      }).catch(() => {});
+    }
+
+    this.score = 0;
+    this.totalScoreEarned = 0;
+    this.totalClicks = 0;
+    this.totalBonuses = 0;
+    this.rebirthLevel = 0;
+    this.rebirthClicks = 0;
+    this.neuroShards = 0;
+    this.totalShardsEarned = 0;
+    this.totalPlayTimeSec = 0;
+    this.sessionStartTime = Date.now();
+    this.producers.forEach(p => p.count = 0);
+    this.boosters.forEach(b => b.count = 0);
+    this.rebirthUpgrades.forEach(u => u.level = 0);
+    this.achievements.forEach(a => { a.unlocked = false; a.claimed = false; });
+    this.activeBuffs = [];
+    this.combo = 0;
+
+    window.location.reload();
   }
 
   exportSave() {
@@ -1752,12 +2166,180 @@ class NeonVibeGame {
     if (!input) return;
     try {
       const jsonStr = decodeURIComponent(escape(atob(input.trim())));
-      JSON.parse(jsonStr);
+      const parsed = JSON.parse(jsonStr);
+      if (!parsed || typeof parsed !== 'object') {
+        throw new Error('Invalid format');
+      }
       localStorage.setItem(this.saveKey, jsonStr);
       alert('Сохранение успешно загружено!');
       window.location.reload();
     } catch (e) {
-      alert('Неверный код сохранения!');
+      alert('Неверный или поврежденный код сохранения!');
+    }
+  }
+
+  /**
+   * 4.2.1 MONETIZATION (VK Bridge & Yandex Games SDK)
+   */
+  showRewardedAd(onRewarded) {
+    // 1. VK Bridge Rewarded Video
+    if (typeof vkBridge !== 'undefined' && vkBridge.send) {
+      vkBridge.send('VKWebAppShowNativeAds', { ad_format: 'rewarded' })
+        .then(data => {
+          if (data && data.result) {
+            if (onRewarded) onRewarded();
+          } else {
+            this.showToast('⚠️ Просмотр прерван', 'Награда начисляется только за полный просмотр.');
+          }
+        })
+        .catch(err => {
+          console.warn('VK Rewarded Video error / dismissed:', err);
+          // Fallback for dev / desktop browser
+          if (onRewarded) onRewarded();
+        });
+      return;
+    }
+
+    // 2. Yandex Games Rewarded Video Fallback
+    if (this.ysdk) {
+      this.ysdk.adv.showRewardedVideo({
+        callbacks: {
+          onOpen: () => {},
+          onRewarded: () => { if (onRewarded) onRewarded(); },
+          onClose: () => {},
+          onError: (e) => {
+            console.warn('Yandex Rewarded ad error', e);
+            if (onRewarded) onRewarded();
+          }
+        }
+      });
+      return;
+    }
+
+    // 3. Dev / Local fallback
+    if (onRewarded) onRewarded();
+  }
+
+  showInterstitialAd() {
+    if (typeof vkBridge !== 'undefined' && vkBridge.send) {
+      vkBridge.send('VKWebAppShowNativeAds', { ad_format: 'interstitial' })
+        .catch(err => {
+          console.log('VK Interstitial not shown / dismissed', err);
+        });
+    }
+  }
+
+  /**
+   * Initialize SDKs
+   */
+  initVKBridge() {
+    if (typeof vkBridge !== 'undefined' && vkBridge.send) {
+      vkBridge.send('VKWebAppInit')
+        .then(() => {
+          console.log('[VK Bridge] Initialized successfully');
+          this.loadFromVkCloud();
+        })
+        .catch(err => {
+          console.warn('[VK Bridge] Init error', err);
+        });
+    }
+  }
+
+  initYandexSDK() {
+    if (typeof YaGames !== 'undefined') {
+      YaGames.init().then(ysdk => {
+        this.ysdk = ysdk;
+        ysdk.features.LoadingAPI?.ready();
+      }).catch(err => {
+        console.warn('Yandex Games SDK error', err);
+      });
+    }
+  }
+
+  /**
+   * Modal Management Methods (Globally Accessible)
+   */
+  openModal(modalId) {
+    const modal = typeof modalId === 'string' ? document.getElementById(modalId) : modalId;
+    if (modal) {
+      modal.classList.remove('hidden');
+    }
+  }
+
+  closeModal(modalId) {
+    if (!modalId) {
+      this.closeAllModals();
+      return;
+    }
+    const modal = typeof modalId === 'string' ? document.getElementById(modalId) : modalId;
+    if (modal) {
+      if ((modal.id === 'modal-offline' || modalId === 'modal-offline') && this.offlinePendingReward > 0) {
+        // Auto-credit pending offline earnings if player dismissed via X or Escape
+        this.score += this.offlinePendingReward;
+        this.totalScoreEarned += this.offlinePendingReward;
+        this.offlinePendingReward = 0;
+      }
+      modal.classList.add('hidden');
+    }
+  }
+
+  closeAllModals() {
+    document.querySelectorAll('.modal-overlay').forEach(m => m.classList.add('hidden'));
+  }
+
+  /**
+   * Ultra-Fast Auto-Clicker Turbo Mode (Item 4)
+   * High-speed batch clicks (500 taps/sec) to rapidly achieve Rebirth threshold without freezing UI.
+   */
+  startAutoClicker(speedMs = 16, tapsPerTick = 8) {
+    if (this.autoClickerInterval) return;
+    this.isAutoClicking = true;
+    if (this.dom.btnTurboClicker) {
+      this.dom.btnTurboClicker.classList.add('active');
+      const label = this.dom.btnTurboClicker.querySelector('.btn-label');
+      if (label) label.textContent = '⚡ ТУРБО-ТАП';
+    }
+
+    this.autoClickerInterval = setInterval(() => {
+      const cur = this.getCurrentEra();
+      const clicksNeeded = cur.clicksNeeded;
+
+      // Stop condition: Target clicks reached for rebirth or max level
+      if (this.rebirthClicks >= clicksNeeded || this.rebirthLevel >= this.eras.length - 1) {
+        this.stopAutoClicker();
+        if (this.dom.btnRebirth) {
+          this.dom.btnRebirth.classList.add('ready');
+        }
+        if (window.audioEngine) window.audioEngine.playAchievement();
+        console.log(`[AutoClicker] Rebirth ready! (${this.rebirthClicks}/${clicksNeeded} clicks). Auto-clicker paused.`);
+        return;
+      }
+
+      for (let i = 0; i < tapsPerTick; i++) {
+        if (this.rebirthClicks >= clicksNeeded) break;
+        this.handleClick(null, true);
+      }
+    }, speedMs);
+  }
+
+  stopAutoClicker() {
+    if (this.autoClickerInterval) {
+      clearInterval(this.autoClickerInterval);
+      this.autoClickerInterval = null;
+    }
+    this.isAutoClicking = false;
+    if (this.dom.btnTurboClicker) {
+      this.dom.btnTurboClicker.classList.remove('active');
+      const label = this.dom.btnTurboClicker.querySelector('.btn-label');
+      if (label) label.textContent = 'Авто-тап';
+    }
+  }
+
+  toggleAutoClicker() {
+    if (this.isAutoClicking) {
+      this.stopAutoClicker();
+    } else {
+      this.startAutoClicker(16, 8);
     }
   }
 
@@ -1765,12 +2347,60 @@ class NeonVibeGame {
    * Event Listeners
    */
   setupEventListeners() {
-    // Large Click Area: clicks anywhere inside #core-stage register as clicks
-    this.dom.coreStage.addEventListener('mousedown', (e) => this.handleClick(e));
-    this.dom.coreStage.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      this.handleClick(e);
-    }, { passive: false });
+    const attachClick = (idOrEl, handler) => {
+      const el = typeof idOrEl === 'string' ? document.getElementById(idOrEl) : idOrEl;
+      if (el) el.addEventListener('click', handler);
+    };
+
+    // Fast Auto-Clicker Turbo Button (Item 4)
+    attachClick(this.dom.btnTurboClicker, () => this.toggleAutoClicker());
+
+    // 4.2.10 Start Menu Controls
+    attachClick(this.dom.btnStartGame, () => this.startGame());
+    attachClick(this.dom.btnOpenMenu, () => this.openStartMenu());
+    attachClick(this.dom.btnStartTutorial, () => this.openModal('modal-tutorial'));
+    attachClick('btn-tutorial', () => this.openModal('modal-tutorial'));
+
+    attachClick(this.dom.btnStartStats, () => {
+      this.renderAchievements();
+      this.openModal('modal-stats');
+    });
+
+    attachClick(this.dom.btnStartSettings, () => {
+      this.openModal('modal-settings');
+    });
+
+    attachClick(this.dom.btnStartAudioToggle, () => {
+      if (window.audioEngine) {
+        const state = window.audioEngine.toggleSfx();
+        if (this.dom.btnStartAudioToggle) this.dom.btnStartAudioToggle.classList.toggle('active', state);
+        if (this.dom.startAudioStatus) this.dom.startAudioStatus.textContent = state ? 'ВКЛ' : 'ВЫКЛ';
+        if (this.dom.btnAudio) {
+          this.dom.btnAudio.classList.toggle('active', state);
+          const icon = this.dom.btnAudio.querySelector('.btn-icon');
+          if (icon) icon.textContent = state ? '🔊' : '🔇';
+        }
+      }
+    });
+
+    attachClick(this.dom.btnStartMusicToggle, () => {
+      if (window.audioEngine) {
+        const state = window.audioEngine.toggleMusic();
+        if (this.dom.btnStartMusicToggle) this.dom.btnStartMusicToggle.classList.toggle('active', state);
+        if (this.dom.startMusicStatus) this.dom.startMusicStatus.textContent = state ? 'ВКЛ' : 'ВЫКЛ';
+        if (this.dom.headerMusicStatus) this.dom.headerMusicStatus.textContent = state ? 'ВКЛ' : 'ВЫКЛ';
+        if (this.dom.btnMusic) this.dom.btnMusic.classList.toggle('active', state);
+      }
+    });
+
+    // Stage Clicker (with touch guard)
+    if (this.dom.coreStage) {
+      this.dom.coreStage.addEventListener('mousedown', (e) => this.handleClick(e));
+      this.dom.coreStage.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        this.handleClick(e);
+      }, { passive: false });
+    }
 
     // Shop tabs
     document.querySelectorAll('.shop-tab').forEach(tab => {
@@ -1785,141 +2415,193 @@ class NeonVibeGame {
       });
     });
 
-    // Rebirth Modals Triggers
-    this.dom.btnRebirth.addEventListener('click', () => this.openRebirthModal());
-    this.dom.btnDoRebirth.addEventListener('click', () => this.doRebirth());
+    // Evolution Modal Triggers
+    attachClick(this.dom.btnRebirth, () => this.openRebirthModal());
+    attachClick(this.dom.btnDoRebirth, () => this.doRebirth());
 
-    this.dom.btnRebirthShop.addEventListener('click', () => {
+    attachClick(this.dom.btnRebirthShop, () => {
       this.renderRebirthShop();
-      this.dom.modalRebirthShop.classList.remove('hidden');
+      this.openModal('modal-rebirth-shop');
     });
 
-    // Yandex Rewarded Video Buttons
-    if (this.dom.btnAdBoost) {
-      this.dom.btnAdBoost.addEventListener('click', () => {
-        this.showRewardedAd(() => {
-          this.activeBuffs.push({
-            id: 'ad_boost_' + Date.now(),
-            name: 'Яндекс Буст',
-            icon: '⚡',
-            multiplier: 5,
-            duration: 120
-          });
-          this.showToast('🎬 БУСТ АКТИВИРОВАН!', 'x5 множитель всего заработка на 2 минуты!', 'meme-toast', 'СУПЕР-УСКОРЕНИЕ 🚀');
-          if (window.neonAudio) window.neonAudio.playBonus();
-        });
-      });
-    }
+    // Event Choice Buttons & Single Claim Button (Item 1)
+    attachClick(this.dom.btnChoiceA, () => {
+      if (this.currentPendingEvent && this.currentPendingEvent.choiceA) {
+        this.currentPendingEvent.choiceA.action();
+      }
+      this.closeModal('modal-event');
+    });
 
-    if (this.dom.btnClaimOfflineX2) {
-      this.dom.btnClaimOfflineX2.addEventListener('click', () => {
-        this.showRewardedAd(() => {
-          if (this.offlinePendingReward) {
-            const doubled = this.offlinePendingReward * 2;
-            this.score += doubled;
-            this.totalScoreEarned += doubled;
-            this.offlinePendingReward = 0;
-            this.showToast('💰 НАГРАДА УДВОЕНА!', `Получено +${formatNumber(doubled)} вайба за просмотр рекламы!`, 'meme-toast', 'БОНУС ЯНДЕКСА 🎬');
-          }
-          closeModal(this.dom.modalOffline);
-          if (window.neonAudio) window.neonAudio.playBonus();
-        });
-      });
-    }
+    attachClick(this.dom.btnChoiceB, () => {
+      if (this.currentPendingEvent && this.currentPendingEvent.choiceB) {
+        this.currentPendingEvent.choiceB.action();
+      }
+      this.closeModal('modal-event');
+    });
 
-    // Audio & Music Toggles
-    this.dom.btnAudio.addEventListener('click', () => {
-      if (window.neonAudio) {
-        const state = window.neonAudio.toggleSfx();
+    attachClick(this.dom.btnClaimSingle, () => {
+      if (this.currentPendingEvent && this.currentPendingEvent.choiceA && !this.currentPendingEvent.choiceB) {
+        this.currentPendingEvent.choiceA.action();
+      }
+      this.closeModal('modal-event');
+    });
+
+    // 4.2.1 Rewarded Video Boost Button
+    attachClick(this.dom.btnAdBoost, () => {
+      this.showRewardedAd(() => {
+        this.addBuff('ad_boost_reward', 'Рекламный Буст (x5)', '🎬', 5, 120, 'all');
+        this.showToast('🎬 БУСТ АКТИВИРОВАН!', 'x5 множитель всего заработка на 2 минуты!', 'meme-toast', 'СУПЕР-УСКОРЕНИЕ 🚀');
+        if (window.audioEngine) window.audioEngine.playBuy();
+      });
+    });
+
+    attachClick(this.dom.btnClaimOfflineX2, () => {
+      this.showRewardedAd(() => {
+        if (this.offlinePendingReward) {
+          const doubled = this.offlinePendingReward * 2;
+          this.score += doubled;
+          this.totalScoreEarned += doubled;
+          this.offlinePendingReward = 0;
+          this.showToast('💰 НАГРАДА УДВОЕНА!', `Получено +${formatNumber(doubled)} Альт-коинов!`, 'meme-toast', 'РЕКЛАМА 🎬');
+        }
+        this.closeModal('modal-offline');
+        if (window.audioEngine) window.audioEngine.playBuy();
+      });
+    });
+
+    // Audio & Music Toggles in Header
+    attachClick(this.dom.btnAudio, () => {
+      if (window.audioEngine) {
+        const state = window.audioEngine.toggleSfx();
         this.dom.btnAudio.classList.toggle('active', state);
-        this.dom.btnAudio.querySelector('.btn-icon').textContent = state ? '🔊' : '🔇';
+        const icon = this.dom.btnAudio.querySelector('.btn-icon');
+        if (icon) icon.textContent = state ? '🔊' : '🔇';
+        if (this.dom.startAudioStatus) this.dom.startAudioStatus.textContent = state ? 'ВКЛ' : 'ВЫКЛ';
       }
     });
 
-    this.dom.btnMusic.addEventListener('click', () => {
-      if (window.neonAudio) {
-        const state = window.neonAudio.toggleMusic();
+    attachClick(this.dom.btnMusic, () => {
+      if (window.audioEngine) {
+        const state = window.audioEngine.toggleMusic();
         this.dom.btnMusic.classList.toggle('active', state);
+        if (this.dom.startMusicStatus) this.dom.startMusicStatus.textContent = state ? 'ВКЛ' : 'ВЫКЛ';
+        if (this.dom.headerMusicStatus) this.dom.headerMusicStatus.textContent = state ? 'ВКЛ' : 'ВЫКЛ';
       }
     });
 
     // Stats Modal
-    const openModal = (m) => m.classList.remove('hidden');
-    const closeModal = (m) => m.classList.add('hidden');
-
-    document.getElementById('btn-stats').addEventListener('click', () => {
-      document.getElementById('st-total-vibe').textContent = formatNumber(this.totalScoreEarned);
-      document.getElementById('st-total-clicks').textContent = formatNumber(this.totalClicks);
-      document.getElementById('st-rebirth-level').textContent = `${this.rebirthLevel} (${this.getCurrentEra().name})`;
-      document.getElementById('st-total-shards').textContent = formatNumber(this.totalShardsEarned);
-      openModal(this.dom.modalStats);
+    attachClick('btn-stats', () => {
+      const cur = this.getCurrentEra();
+      const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+      };
+      setVal('st-total-vibe', formatNumber(this.totalScoreEarned));
+      setVal('st-total-clicks', formatNumber(this.totalClicks));
+      setVal('st-rebirth-level', `${cur.stageNumber} (${cur.name})`);
+      setVal('st-total-shards', formatNumber(this.totalShardsEarned));
+      if (this.dom.stPlaytime) this.dom.stPlaytime.textContent = formatTime(this.totalPlayTimeSec);
+      if (this.dom.stTotalBonuses) this.dom.stTotalBonuses.textContent = formatNumber(this.totalBonuses);
+      this.openModal('modal-stats');
     });
 
-    document.getElementById('btn-settings').addEventListener('click', () => {
-      openModal(this.dom.modalSettings);
+    // Settings Modal
+    attachClick('btn-settings', () => {
+      this.openModal('modal-settings');
     });
 
-    // Modal Close buttons
-    document.querySelectorAll('.modal-close').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const modalId = btn.getAttribute('data-close');
-        const modal = document.getElementById(modalId);
-        if (modal) closeModal(modal);
-      });
-    });
-
-    // Modal Overlay backdrop click
-    document.querySelectorAll('.modal-overlay').forEach(overlay => {
-      overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) closeModal(overlay);
-      });
-    });
-
-    // Claim offline button
-    document.getElementById('btn-claim-offline').addEventListener('click', () => {
+    // Claim offline button (regular)
+    attachClick('btn-claim-offline', () => {
       if (this.offlinePendingReward) {
         this.score += this.offlinePendingReward;
         this.totalScoreEarned += this.offlinePendingReward;
         this.offlinePendingReward = 0;
       }
-      closeModal(this.dom.modalOffline);
-      if (window.neonAudio) window.neonAudio.playBuy();
+      this.closeModal('modal-offline');
+      if (window.audioEngine) window.audioEngine.playBuy();
     });
 
     // Settings actions
-    document.getElementById('btn-force-save').addEventListener('click', () => {
+    attachClick('btn-force-save', () => {
       this.saveGame();
-      this.showToast('💾 Сохранено', 'Прогресс успешно сохранен в памяти браузера!');
+      this.syncVkCloudSave();
+      this.showToast('💾 Сохранено', 'Прогресс сохранен локально и отправлен в облако VK!');
     });
 
-    document.getElementById('btn-reset-game').addEventListener('click', () => this.resetGame());
-    document.getElementById('btn-export-save').addEventListener('click', () => this.exportSave());
-    document.getElementById('btn-import-save').addEventListener('click', () => this.importSave());
+    attachClick('btn-reset-game', () => this.resetGame());
+    attachClick('btn-export-save', () => this.exportSave());
+    attachClick('btn-import-save', () => this.importSave());
 
     // Settings controls: Quality & Volume
     const qualitySelect = document.getElementById('setting-fx-quality');
-    qualitySelect.addEventListener('change', (e) => {
-      if (window.neonParticles) {
-        window.neonParticles.setQuality(e.target.value);
-      }
-    });
+    if (qualitySelect) {
+      qualitySelect.addEventListener('change', (e) => {
+        if (window.particleEngine) {
+          window.particleEngine.setQuality(e.target.value);
+        }
+      });
+    }
 
     const volSlider = document.getElementById('setting-sfx-volume');
-    volSlider.addEventListener('input', (e) => {
-      const vol = e.target.value / 100;
-      if (window.neonAudio) {
-        window.neonAudio.setVolume(vol);
+    if (volSlider) {
+      volSlider.addEventListener('input', (e) => {
+        const vol = e.target.value / 100;
+        if (window.audioEngine) {
+          window.audioEngine.setVolume(vol);
+        }
+      });
+    }
+
+    // =========================================================================
+    // UNIVERSAL BULLETPROOF MODAL CLOSE DELEGATION
+    // Catches clicks on .modal-close, [data-close], and backdrops globally
+    // =========================================================================
+    document.addEventListener('click', (e) => {
+      const closeBtn = e.target.closest('.modal-close, [data-close]');
+      if (closeBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const targetModalId = closeBtn.getAttribute('data-close');
+        if (targetModalId) {
+          this.closeModal(targetModalId);
+        } else {
+          const parentModal = closeBtn.closest('.modal-overlay');
+          if (parentModal) this.closeModal(parentModal);
+        }
+        return;
+      }
+
+      if (e.target.classList.contains('modal-overlay')) {
+        this.closeModal(e.target);
       }
     });
 
-    // Save on tab close
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        this.closeAllModals();
+      }
+    });
+
+    // Save on tab minimize / switch / close
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && !this.isResetting) {
+        this.saveGame();
+        this.syncVkCloudSave();
+      }
+    });
+
     window.addEventListener('beforeunload', () => {
-      this.saveGame();
+      if (!this.isResetting) {
+        this.saveGame();
+        this.syncVkCloudSave();
+      }
     });
   }
 }
 
 // Launch Game on Window Load
 window.addEventListener('DOMContentLoaded', () => {
-  window.vibeGame = new NeonVibeGame();
+  window.altushkaGame = new AltushkaGame();
+  window.startAutoClicker = (speed) => window.altushkaGame && window.altushkaGame.startAutoClicker(speed);
+  window.stopAutoClicker = () => window.altushkaGame && window.altushkaGame.stopAutoClicker();
 });

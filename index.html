@@ -2,33 +2,96 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>⚡ Neon Vibe Clicker — Неоновый Вайб-Кликер</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>🖤 Альтушка-Кликер — Прокачай свою Альтушку!</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@500;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=5">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
-  <!-- Yandex Games SDK -->
-  <script src="https://yandex.ru/games/sdk/v2"></script>
-  <!-- VK Bridge SDK for VK Games -->
+  <link rel="stylesheet" href="style.css?v=15">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🖤</text></svg>">
+
+  <!-- VK Bridge SDK for VK Mini Apps (Requirement 4.2.1) -->
   <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
+  <!-- Yandex Games SDK (Multiplatform fallback) -->
+  <script src="https://yandex.ru/games/sdk/v2"></script>
 </head>
-<body class="theme-era-0">
+<body class="theme-stage-1">
   <!-- Canvas for dynamic neon effects & particle bursts -->
   <canvas id="fx-canvas"></canvas>
 
-  <!-- Fullscreen Rebirth Cyber Warp Grid Overlay -->
+  <!-- =========================================================================
+       4.2.10 ПОЛНОЦЕННОЕ СТАРТОВОЕ МЕНЮ (VK Games Requirement)
+       ========================================================================= -->
+  <div id="start-menu-screen" class="start-menu-screen">
+    <div class="start-menu-backdrop"></div>
+    <div class="start-menu-content">
+      <div class="start-menu-badge">🖤 VK MINI APPS EDITION</div>
+      <h1 class="start-menu-title">ALTUSHKA<span class="neon-purple">CLICKER</span></h1>
+      <p class="start-menu-tagline">Пройди путь от скромной школьницы до ультра-заряженной королевы рейва</p>
+
+      <!-- Character Stage Status Preview -->
+      <div class="start-menu-hero-card">
+        <div class="start-hero-avatar-wrap">
+          <img id="start-hero-preview-img" class="start-hero-preview-img" src="assets/images/pack1_level1.jpg" alt="Альтушка" />
+        </div>
+        <div class="start-hero-info">
+          <div class="start-hero-level" id="start-menu-stage-title">Уровень 1: Серая Мышка</div>
+          <div class="start-hero-quote" id="start-menu-stage-quote">«Обычная скромная школьница, делающая уроки на кухне»</div>
+          <div class="start-hero-stats">
+            <span>🖤 Баланс: <strong id="start-menu-score">0</strong></span>
+            <span>👆 Тапы: <strong id="start-menu-clicks">0</strong></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Action Buttons -->
+      <div class="start-menu-actions">
+        <button id="btn-start-game" class="cyber-btn primary large start-play-btn">
+          <span class="btn-main-label" id="btn-start-game-label">▶️ НАЧАТЬ ИГРУ</span>
+          <small class="btn-sub-label">Погрузиться в альт-вайб спальников</small>
+        </button>
+
+        <div class="start-menu-secondary-row">
+          <button id="btn-start-tutorial" class="cyber-btn secondary">
+            <span>📖 Как играть</span>
+          </button>
+          <button id="btn-start-stats" class="cyber-btn secondary">
+            <span>📊 Статистика</span>
+          </button>
+          <button id="btn-start-settings" class="cyber-btn secondary">
+            <span>⚙️ Настройки</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Audio & Meta Controls in Start Menu -->
+      <div class="start-menu-footer">
+        <div class="start-audio-toggles">
+          <button id="btn-start-audio-toggle" class="icon-pill-btn active" title="Переключить звук">
+            <span class="pill-icon">🔊</span> Звук: <strong id="start-audio-status">ВКЛ</strong>
+          </button>
+          <button id="btn-start-music-toggle" class="icon-pill-btn" title="Переключить музыку">
+            <span class="pill-icon">🎵</span> Музыка: <strong id="start-music-status">ВЫКЛ</strong>
+          </button>
+        </div>
+        <div class="start-compliance-note">
+          <span>Правила VK Games: 4.2.1 • 4.2.4 • 4.2.5 • 4.2.7 • 4.2.10</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fullscreen Rebirth / Evolution Warp Grid Overlay -->
   <div id="rebirth-warp-overlay" class="rebirth-warp-overlay hidden">
     <div class="warp-grid-perspective">
       <div class="warp-grid-lines"></div>
     </div>
     <div class="warp-content">
       <div class="warp-particles"></div>
-      <div class="warp-glitch-badge">⚠️ СМЕНА РЕАЛЬНОСТИ ⚠️</div>
-      <h2 class="warp-glitch-title">КВАНТОВЫЙ СКАЧОК</h2>
-      <div class="warp-era-name" id="warp-era-title">ЭРА: DEEPSEEK 🐳</div>
-      <p class="warp-subtitle">Матрица переписана. Вселенная ускорена!</p>
+      <div class="warp-glitch-badge">⚠️ ФАЗА ТРАНСФОРМАЦИИ ⚠️</div>
+      <h2 class="warp-glitch-title">ЭВОЛЮЦИЯ АЛЬТУШКИ</h2>
+      <div class="warp-era-name" id="warp-era-title">УРОВЕНЬ 2: НАЧИНАЮЩАЯ ⚡</div>
+      <p class="warp-subtitle">Стиль меняется. Вайб ускорен!</p>
     </div>
   </div>
 
@@ -36,27 +99,43 @@
     <!-- Header: Game Title, Quick Controls, Sound & Save -->
     <header class="game-header">
       <div class="logo-group">
-        <div class="logo-icon" id="header-logo-icon">⚡</div>
+        <button id="btn-open-menu" class="icon-btn menu-home-btn" title="Вернуться в Главное Меню">
+          <span class="btn-icon">🏠</span>
+          <span class="btn-label">Меню</span>
+        </button>
+        <div class="logo-icon" id="header-logo-icon">🖤</div>
         <div>
-          <h1 class="logo-title">VIBE<span class="neon-pink">CLICKER</span></h1>
-          <p class="logo-subtitle" id="current-era-badge">Эра: Базовая</p>
+          <h1 class="logo-title">ALTUSHKA<span class="neon-purple">CLICKER</span></h1>
+          <p class="logo-subtitle" id="current-era-badge">Уровень 1: Серая Мышка</p>
         </div>
       </div>
 
       <div class="header-actions">
-        <!-- Rebirth buttons -->
-        <button id="btn-rebirth" class="icon-btn rebirth-btn" title="Уровень перерождения и квантовый скачок">
-          <span class="btn-icon">🌌</span>
-          <span class="btn-label" id="rebirth-btn-text">Перерождение</span>
-          <span class="rebirth-progress-pill" id="rebirth-pill">0/150 👆</span>
+        <!-- 4.2.7 Session Playtime Timer -->
+        <div class="session-timer-pill" id="session-timer-pill" title="Время текущей игровой сессии (Правило 4.2.7 > 10 мин)">
+          <span class="timer-icon">⏱️</span>
+          <span id="session-timer-val">00:00</span>
+        </div>
+
+        <!-- Evolution / Rebirth button -->
+        <button id="btn-rebirth" class="icon-btn rebirth-btn" title="Эволюция и смена стиля персонажа">
+          <span class="btn-icon">🖤</span>
+          <span class="btn-label" id="rebirth-btn-text">Эволюция</span>
+          <span class="rebirth-progress-pill" id="rebirth-pill">0/200 👆</span>
         </button>
 
-        <button id="btn-rebirth-shop" class="icon-btn shards-btn" title="Магазин Нейро-Осколков">
-          <span class="btn-icon">💠</span>
+        <!-- Fast Auto-Clicker Turbo Button -->
+        <button id="btn-turbo-clicker" class="icon-btn turbo-btn" title="Быстрый авто-кликер до следующей эволюции">
+          <span class="btn-icon">⚡</span>
+          <span class="btn-label">Авто-тап</span>
+        </button>
+
+        <button id="btn-rebirth-shop" class="icon-btn shards-btn" title="Магазин Альт-Осколков">
+          <span class="btn-icon">🦇</span>
           <span class="btn-label"><span id="shards-display">0</span></span>
         </button>
 
-        <!-- Yandex Rewarded Ad Boost -->
+        <!-- 4.2.1 Rewarded Ad Boost (VK Bridge & Yandex) -->
         <button id="btn-ad-boost" class="icon-btn ad-btn" title="Смотреть рекламу: супер-буст x5 на 2 минуты!">
           <span class="btn-icon">🎬</span>
           <span class="btn-label">Буст x5</span>
@@ -67,16 +146,21 @@
           <span class="btn-icon">🔊</span>
           <span class="btn-label">Звук</span>
         </button>
-        <button id="btn-music" class="icon-btn" title="Фоновый Синт-Вайб">
+        <button id="btn-music" class="icon-btn" title="Фоновая музыка">
           <span class="btn-icon">🎵</span>
-          <span class="btn-label">Вайб-фон</span>
+          <span class="btn-label">Музыка: <strong id="header-music-status">ВКЛ</strong></span>
         </button>
-        <!-- Stats modal trigger -->
+        <!-- Tutorial trigger -->
+        <button id="btn-tutorial" class="icon-btn" title="Обучение и правила игры">
+          <span class="btn-icon">📖</span>
+          <span class="btn-label">Гайд</span>
+        </button>
+        <!-- Stats trigger -->
         <button id="btn-stats" class="icon-btn" title="Статистика и Достижения">
           <span class="btn-icon">📊</span>
-          <span class="btn-label">Инфо</span>
+          <span class="btn-label">Статы</span>
         </button>
-        <!-- Save/Reset controls -->
+        <!-- Settings -->
         <button id="btn-settings" class="icon-btn" title="Настройки и Сохранение">
           <span class="btn-icon">⚙️</span>
           <span class="btn-label">Опции</span>
@@ -86,32 +170,32 @@
 
     <!-- Main Content Grid -->
     <main class="main-content">
-      <!-- Left Column: The Vibe Core (Click Area) -->
+      <!-- Left Column: The Altushka Stage (Click Area) -->
       <section class="clicker-section" id="clicker-section">
         <!-- Floating Numbers Target Container -->
         <div id="float-container" class="float-container"></div>
 
-        <!-- Random Floating Glitch Bonus / Neon Crystal (strictly confined inside clicker section) -->
-        <div id="lucky-crystal" class="lucky-crystal hidden" title="Хватай бонус!">
-          <div class="lucky-crystal-inner">💎</div>
-          <span class="lucky-crystal-badge">LUCKY!</span>
+        <!-- Random Floating Bonus (Вкусняшка / Сидр / Кефирчик) -->
+        <div id="lucky-crystal" class="lucky-crystal hidden" title="Хватай вкусняшку!">
+          <div class="lucky-crystal-inner">🍩</div>
+          <span class="lucky-crystal-badge">ВКУСНЯШКА!</span>
         </div>
 
         <!-- Score & Stats Display -->
         <div class="score-card">
-          <div class="score-label">ВАШ ВАЙБ</div>
+          <div class="score-label">БАЛАНС АЛЬТ-КОИНОВ</div>
           <div class="score-val-wrapper">
-            <span class="currency-symbol" id="score-currency-icon">✨</span>
+            <span class="currency-symbol" id="score-currency-icon">🖤</span>
             <span id="score-display" class="score-val">0</span>
           </div>
           <div class="stats-row">
-            <div class="stat-badge" title="Вайб генерируется в секунду">
+            <div class="stat-badge" title="Альт-коины генерируются в секунду">
               <span class="stat-icon">⚡</span>
               <span class="stat-text"><span id="vps-display">0</span> / сек</span>
             </div>
-            <div class="stat-badge" title="Вайб за один клик">
+            <div class="stat-badge" title="Альт-коины за один клик">
               <span class="stat-icon">👆</span>
-              <span class="stat-text"><span id="vpc-display">1</span> / клик</span>
+              <span class="stat-text"><span id="vpc-display">1</span> / тап</span>
             </div>
           </div>
         </div>
@@ -119,37 +203,37 @@
         <!-- Combo / Fever Gauge -->
         <div class="combo-container">
           <div class="combo-header">
-            <span class="combo-title">КОМБО-РАЗГОН: <strong id="combo-multiplier" class="neon-cyan">x1.0</strong></span>
-            <span id="combo-status" class="combo-status">Кликай быстрее!</span>
+            <span class="combo-title">ХАЙП-РАЗГОН: <strong id="combo-multiplier" class="neon-purple">x1.0</strong></span>
+            <span id="combo-status" class="combo-status">Тапай по альтушке!</span>
           </div>
           <div class="combo-bar-bg">
             <div id="combo-bar" class="combo-bar"></div>
           </div>
         </div>
 
-        <!-- Interactive Neon Vibe Core Area (Large Click Area) -->
-        <div class="core-stage" id="core-stage" title="Кликай в любой точке этой зоны!">
-          <div class="core-glow-backdrop" id="core-glow-backdrop"></div>
-          <div class="core-rings">
-            <div class="ring ring-1"></div>
-            <div class="ring ring-2"></div>
-            <div class="ring ring-3"></div>
-          </div>
-
-          <!-- Orbiting Badges Container (Purchased AI / Buffs appear here) -->
-          <div class="orbit-badges-container" id="orbit-badges-container"></div>
-
-          <div id="vibe-core" class="vibe-core" aria-label="Собрать вайб">
-            <div class="core-inner">
-              <div class="core-crystal" id="core-crystal">
-                <span class="core-symbol" id="core-symbol-icon">⚡</span>
-              </div>
-            </div>
-            <div class="core-pulse-wave"></div>
+        <!-- Speech bubble above character (OUTSIDE character frame, never covers head/face) -->
+        <div class="altushka-speech-container">
+          <div class="altushka-speech-bubble" id="altushka-speech">
+            <span class="speech-quote-icon">💬</span>
+            <span class="speech-text" id="speech-bubble-text">«Тапай по мне, зай...»</span>
+            <div class="speech-tail"></div>
           </div>
         </div>
 
-        <!-- Active Buffs Indicator (Beside / under the clicker) -->
+        <!-- Interactive Altushka Hero Stage (Large Click Area) -->
+        <div class="core-stage altushka-stage-card" id="core-stage" title="Тапай прямо по альтушке!">
+          <!-- Background of the current stage environment -->
+          <div class="stage-bg-layer" id="stage-bg-layer"></div>
+          <div class="stage-gradient-overlay"></div>
+
+          <!-- Character Sprite Wrapper -->
+          <div class="altushka-sprite-wrapper" id="altushka-sprite-wrapper">
+            <img id="altushka-sprite" class="altushka-sprite-img" src="assets/images/pack1_level1.jpg" alt="Альтушка" />
+            <div class="altushka-click-ripple" id="altushka-ripple"></div>
+          </div>
+        </div>
+
+        <!-- Active Buffs Indicator (Countdown timers for events) -->
         <div id="active-buffs" class="active-buffs-container"></div>
       </section>
 
@@ -158,34 +242,33 @@
         <!-- Shop Tabs Navigation -->
         <div class="shop-tabs">
           <button class="shop-tab active" data-tab="producers">
-            <span class="tab-icon">🏭</span>
-            <span>Авто-вайб</span>
+            <span class="tab-icon">🖤</span>
+            <span>Альт-Движ</span>
           </button>
           <button class="shop-tab" data-tab="boosters">
             <span class="tab-icon">⚡</span>
-            <span>Усилители клика</span>
+            <span>Шмот и Тюнинг</span>
           </button>
           <button class="shop-tab" data-tab="achievements">
             <span class="tab-icon">🏆</span>
-            <span>Ачивки (<span id="achievements-count">0/15</span>)</span>
+            <span>Ачивки (<span id="achievements-count">0/9</span>)</span>
           </button>
         </div>
 
-        <!-- Tab 1: Auto-Clickers (Кофе, Энергетик, Видеокарта, Нейросети: Дипсик, Квен, Гемини, Чат ГПТ, Клод) -->
+        <!-- Tab 1: Auto-Clickers (Альт-Движ) -->
         <div id="tab-producers" class="shop-tab-content active">
           <div class="shop-header-info">
-            <span class="shop-subtitle">Автономные генераторы и квантовые нейросети</span>
-            <span class="save-status-indicator" id="save-indicator">💾 Сохранено</span>
+            <span class="shop-subtitle">Автономные источники Альт-Коинов и тусовки</span>
           </div>
           <div id="producers-list" class="shop-items-list">
             <!-- Dynamically injected via JavaScript -->
           </div>
         </div>
 
-        <!-- Tab 2: Click Boosters & Synergy Upgrades -->
+        <!-- Tab 2: Click Boosters & Synergy Upgrades (Шмот и Тюнинг) -->
         <div id="tab-boosters" class="shop-tab-content">
           <div class="shop-header-info">
-            <span class="shop-subtitle">Прокачка ручной мощи, резонанса и критов</span>
+            <span class="shop-subtitle">Стрелки, септум, оверсайз, платформа и криты</span>
           </div>
           <div id="boosters-list" class="shop-items-list">
             <!-- Dynamically injected via JavaScript -->
@@ -195,7 +278,7 @@
         <!-- Tab 3: Achievements -->
         <div id="tab-achievements" class="shop-tab-content">
           <div class="shop-header-info">
-            <span class="shop-subtitle">Твои вехи на пути к абсолютной сингулярности</span>
+            <span class="shop-subtitle">Награды за достижения: получай Альт-коины 🖤 и Осколки 🦇</span>
           </div>
           <div id="achievements-list" class="achievements-grid">
             <!-- Dynamically injected via JavaScript -->
@@ -205,79 +288,171 @@
     </main>
   </div>
 
+  <!-- Grand Achievement Unlock Celebration Banner (Item 10) -->
+  <div id="achievement-banner" class="achievement-banner hidden">
+    <div class="ach-banner-glow"></div>
+    <div class="ach-banner-card">
+      <div class="ach-banner-icon-box">
+        <span id="ach-banner-icon">🏆</span>
+      </div>
+      <div class="ach-banner-info">
+        <div class="ach-banner-eyebrow">👑 ДОСТИЖЕНИЕ РАЗБЛОКИРОВАНО!</div>
+        <div class="ach-banner-title" id="ach-banner-title">160см / 140кг Величия</div>
+        <div class="ach-banner-desc" id="ach-banner-desc">Достигните 5 уровня эволюции</div>
+        <div class="ach-banner-reward" id="ach-banner-reward">🎁 Награда: +50,000 🖤 +5 🦇</div>
+      </div>
+      <button class="ach-banner-close" id="ach-banner-close" title="Закрыть">&times;</button>
+    </div>
+  </div>
+
   <!-- Toast Notification System -->
   <div id="toast-container" class="toast-container"></div>
 
-  <!-- Modal: Rebirth (Квантовое Перерождение) -->
+  <!-- Modal: Tutorial & How to Play (4.2.4 & 4.2.10) -->
+  <div id="modal-tutorial" class="modal-overlay hidden">
+    <div class="modal-box tutorial-modal-box">
+      <div class="modal-header">
+        <h2 class="modal-title">📖 Как играть в Альтушка-Кликер</h2>
+        <button class="modal-close" data-close="modal-tutorial" onclick="if(window.altushkaGame) window.altushkaGame.closeModal('modal-tutorial');">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="tutorial-cards-grid">
+          <div class="tutorial-step-card">
+            <div class="step-num">1</div>
+            <div class="step-icon">👆</div>
+            <div class="step-title">Тапай по Альтушке</div>
+            <div class="step-text">Каждый клик приносит Альт-коины 🖤. Тапай ритмично, чтобы набить <strong>Хайп-Разгон (x3.5)</strong>!</div>
+          </div>
+          <div class="tutorial-step-card">
+            <div class="step-num">2</div>
+            <div class="step-icon">🛍️</div>
+            <div class="step-title">Прокачивай шмот и авто-доход</div>
+            <div class="step-text">Покупай энергетики, фиолетовую краску, сидр, зипки и платформы New Rock в магазине <strong>«Альт-Движ»</strong>.</div>
+          </div>
+          <div class="tutorial-step-card">
+            <div class="step-num">3</div>
+            <div class="step-icon">🍩</div>
+            <div class="step-title">Лови события и делай выбор</div>
+            <div class="step-text">Лови летающие вкусняшки и принимай решения в карточках событий (9mice, патруль на Китай-городе, кефирчик)!</div>
+          </div>
+          <div class="tutorial-step-card">
+            <div class="step-num">4</div>
+            <div class="step-icon">👑</div>
+            <div class="step-title">Совершай Эволюцию</div>
+            <div class="step-text">Выполни требования кликов и монет, чтобы преобразить героиню в <strong>Ультра-Альтушку 160см / 140кг</strong>!</div>
+          </div>
+        </div>
+        <div class="text-center" style="margin-top: 18px;">
+          <button class="cyber-btn primary modal-close tutorial-confirm-btn" data-close="modal-tutorial" onclick="if(window.altushkaGame) window.altushkaGame.closeModal('modal-tutorial');">
+            <span>ВСЁ ПОНЯТНО, ПОГНАЛИ! 🖤</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Random Event with Choices -->
+  <div id="modal-event" class="modal-overlay hidden">
+    <div class="modal-box event-modal-box">
+      <div class="modal-header">
+        <h2 class="modal-title" id="event-modal-title">⚡ МЕМНОЕ СОБЫТИЕ</h2>
+        <button class="modal-close" data-close="modal-event" onclick="if(window.altushkaGame) window.altushkaGame.closeModal('modal-event');">&times;</button>
+      </div>
+      <div class="modal-body text-center">
+        <div class="event-badge" id="event-badge">🖤 ВЫБОР СУДЬБЫ</div>
+        <div class="event-icon-wrapper" id="event-icon">🍩</div>
+        <h3 class="event-headline" id="event-headline">Хочется вкусняшки ночью!</h3>
+        <p class="event-story" id="event-story">В 2 часа ночи непреодолимо захотелось чипсов, бургеров и сырного соуса. Что делаем?</p>
+
+        <!-- Choices Container -->
+        <div class="event-choices-grid" id="event-choices-grid">
+          <button id="btn-choice-a" class="cyber-btn event-choice-btn primary">
+            <span class="choice-title" id="choice-a-title">🍔 Заказать вкусняшки</span>
+            <span class="choice-desc" id="choice-a-desc">-150 Альт-коинов, но +50% к комбо</span>
+          </button>
+          <button id="btn-choice-b" class="cyber-btn event-choice-btn">
+            <span class="choice-title" id="choice-b-title">🥛 Попить кефирчик</span>
+            <span class="choice-desc" id="choice-b-desc">Бесплатно: +x2 буст на 30 сек</span>
+          </button>
+        </div>
+
+        <button id="btn-claim-single" class="cyber-btn primary large hidden" style="margin-top: 15px; width: 100%;">
+          <span>ПРИНЯТЬ ВАЙБ 🖤</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Evolution (Перерождение) -->
   <div id="modal-rebirth" class="modal-overlay hidden">
     <div class="modal-box rebirth-modal-box">
       <div class="modal-header">
-        <h2 class="modal-title">🌌 Квантовое Перерождение</h2>
-        <button class="modal-close" data-close="modal-rebirth">&times;</button>
+        <h2 class="modal-title">🖤 Эволюция Альтушки</h2>
+        <button class="modal-close" data-close="modal-rebirth" onclick="if(window.altushkaGame) window.altushkaGame.closeModal('modal-rebirth');">&times;</button>
       </div>
       <div class="modal-body text-center">
         <div class="rebirth-era-card">
           <div class="era-preview-row">
             <div class="era-side">
-              <span class="era-caption">Текущая Эра</span>
-              <div class="era-avatar" id="rebirth-cur-avatar">⚡</div>
-              <strong id="rebirth-cur-name">Базовая</strong>
+              <span class="era-caption">Текущий Уровень</span>
+              <div class="era-avatar" id="rebirth-cur-avatar">🐭</div>
+              <strong id="rebirth-cur-name">Серая Мышка</strong>
             </div>
             <div class="era-arrow">➔</div>
             <div class="era-side next-era">
-              <span class="era-caption">Следующая Эра</span>
-              <div class="era-avatar next" id="rebirth-next-avatar">🐳</div>
-              <strong id="rebirth-next-name" class="neon-cyan">DeepSeek</strong>
+              <span class="era-caption">Следующий Уровень</span>
+              <div class="era-avatar next" id="rebirth-next-avatar">⚡</div>
+              <strong id="rebirth-next-name" class="neon-purple">Начинающая</strong>
             </div>
           </div>
-          <p class="rebirth-quote" id="rebirth-era-quote">«Китайский мемный гений, переворачивающий индустрию AI!»</p>
+          <p class="rebirth-quote" id="rebirth-era-quote">«Первые стрелки, фиолетовые пряди и баночка энергетика!»</p>
         </div>
 
         <!-- Clicks Requirement Progress -->
         <div class="rebirth-progress-box">
           <div class="rebirth-progress-labels">
             <span>Прогресс кликов для перехода:</span>
-            <strong id="rebirth-clicks-num">0 / 150</strong>
+            <strong id="rebirth-clicks-num">0 / 200</strong>
           </div>
           <div class="rebirth-bar-bg">
             <div id="rebirth-bar-fill" class="rebirth-bar-fill"></div>
           </div>
-          <small class="rebirth-tip">💡 В режиме ГИПЕР-ВАЙБ клики считаются с x2 скоростью, а криты — с x3!</small>
+          <small class="rebirth-tip">💡 В режиме ХАЙП-РАЗГОН клики считаются с x2 скоростью, а криты — с x3!</small>
         </div>
 
         <!-- Shards reward -->
         <div class="rebirth-reward-card">
-          <span class="rebirth-reward-icon">💠</span>
+          <span class="rebirth-reward-icon">🦇</span>
           <div>
-            <div class="rebirth-reward-val">+<span id="rebirth-shards-reward">10</span> Нейро-Осколков</div>
-            <div class="rebirth-reward-sub">Валюта для постоянных улучшений в Магазине Перерождения</div>
+            <div class="rebirth-reward-val">+<span id="rebirth-shards-reward">10</span> Альт-Осколков</div>
+            <div class="rebirth-reward-sub">Валюта для постоянных мета-улучшений в магазине</div>
           </div>
         </div>
 
         <p class="rebirth-warning">
-          ⚠️ При перерождении сбрасываются очки вайба и базовые авто-кликеры, но сохраняются <strong>все ачивки, нейро-осколки и постоянные перки</strong>, а также открывается новая нейросеть и уникальный неоновый стиль!
+          ⚠️ При эволюции сбрасываются Альт-коины и базовые авто-источники, но сохраняются <strong>все ачивки, Альт-осколки и постоянные перки</strong>, а также полностью меняется внешний вид, стиль и открывается новый уровень дохода!
         </p>
 
         <button id="btn-do-rebirth" class="cyber-btn primary large rebirth-action-btn disabled">
-          <span>СОВЕРШИТЬ ПЕРЕРОЖДЕНИЕ! 🌌</span>
+          <span>СОВЕРШИТЬ ЭВОЛЮЦИЮ! 🖤</span>
         </button>
       </div>
     </div>
   </div>
 
-  <!-- Modal: Rebirth Shop (Магазин Перерождения) -->
+  <!-- Modal: Rebirth / Shards Shop -->
   <div id="modal-rebirth-shop" class="modal-overlay hidden">
     <div class="modal-box rebirth-shop-box">
       <div class="modal-header">
-        <h2 class="modal-title">🔮 Магазин Нейро-Осколков</h2>
+        <h2 class="modal-title">🦇 Магазин Альт-Осколков</h2>
         <div class="modal-shards-badge">
-          <span>💠</span>
+          <span>🦇</span>
           <span id="modal-shards-count">0</span>
         </div>
-        <button class="modal-close" data-close="modal-rebirth-shop">&times;</button>
+        <button class="modal-close" data-close="modal-rebirth-shop" onclick="if(window.altushkaGame) window.altushkaGame.closeModal('modal-rebirth-shop');">&times;</button>
       </div>
       <div class="modal-body">
-        <p class="modal-desc">Постоянные мета-улучшения матрицы, действующие сквозь все эры и перерождения:</p>
+        <p class="modal-desc">Постоянные улучшения характера и стиля, действующие сквозь все эволюции:</p>
         <div id="rebirth-upgrades-list" class="rebirth-items-list">
           <!-- Injected via JavaScript -->
         </div>
@@ -285,45 +460,53 @@
     </div>
   </div>
 
-  <!-- Modal: Stats & Info -->
+  <!-- Modal: Stats & Info (4.2.7) -->
   <div id="modal-stats" class="modal-overlay hidden">
     <div class="modal-box">
       <div class="modal-header">
-        <h2 class="modal-title">📊 Статистика Вайбера</h2>
-        <button class="modal-close" data-close="modal-stats">&times;</button>
+        <h2 class="modal-title">📊 Альт-Статистика</h2>
+        <button class="modal-close" data-close="modal-stats" onclick="if(window.altushkaGame) window.altushkaGame.closeModal('modal-stats');">&times;</button>
       </div>
       <div class="modal-body">
         <div class="stats-grid">
           <div class="stat-card">
-            <span class="stat-card-label">Всего заработано</span>
-            <span id="st-total-vibe" class="stat-card-val neon-cyan">0</span>
+            <span class="stat-card-label">Всего Альт-коинов</span>
+            <span id="st-total-vibe" class="stat-card-val neon-purple">0</span>
           </div>
           <div class="stat-card">
-            <span class="stat-card-label">Сделано кликов</span>
+            <span class="stat-card-label">Сделано тапов</span>
             <span id="st-total-clicks" class="stat-card-val neon-pink">0</span>
           </div>
           <div class="stat-card">
-            <span class="stat-card-label">Уровень перерождения</span>
-            <span id="st-rebirth-level" class="stat-card-val neon-yellow">0</span>
+            <span class="stat-card-label">Уровень эволюции</span>
+            <span id="st-rebirth-level" class="stat-card-val neon-yellow">1</span>
           </div>
           <div class="stat-card">
-            <span class="stat-card-label">Нейро-Осколки</span>
+            <span class="stat-card-label">Общее время в игре</span>
+            <span id="st-playtime" class="stat-card-val neon-cyan">00:00</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-card-label">Альт-Осколки</span>
             <span id="st-total-shards" class="stat-card-val">0</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-card-label">Поймано вкусняшек</span>
+            <span id="st-total-bonuses" class="stat-card-val">0</span>
           </div>
         </div>
         <div class="modal-desc-box">
-          <p>💡 <strong>Совет:</strong> Кликайте в любой точке левой панели, чтобы набивать комбо. В режиме <em>ГИПЕР-ВАЙБ (x3.5)</em> вы быстрее наберете клики для нового уровня перерождения!</p>
+          <p>💡 <strong>Требование VK Games 4.2.7:</strong> Для полного прохождения игры и открытия 5-го уровня Ультра-Альтушки требуется не менее 15–25 минут активного геймплея.</p>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Modal: Settings & Save Management -->
+  <!-- Modal: Settings & Save Management (Cloud VK Storage Sync) -->
   <div id="modal-settings" class="modal-overlay hidden">
     <div class="modal-box">
       <div class="modal-header">
         <h2 class="modal-title">⚙️ Управление Игрой</h2>
-        <button class="modal-close" data-close="modal-settings">&times;</button>
+        <button class="modal-close" data-close="modal-settings" onclick="if(window.altushkaGame) window.altushkaGame.closeModal('modal-settings');">&times;</button>
       </div>
       <div class="modal-body">
         <div class="settings-group">
@@ -341,15 +524,20 @@
           </label>
         </div>
 
+        <div class="vk-cloud-status-box">
+          <div class="cloud-status-title">☁️ Облачное сохранение VK Storage:</div>
+          <div class="cloud-status-desc" id="vk-cloud-status-text">Используется 1/1000 переменных • Лимит вызовов соблюден</div>
+        </div>
+
         <div class="settings-actions">
           <button id="btn-force-save" class="cyber-btn primary">
-            <span>💾 Сохранить сейчас</span>
+            <span>💾 Сохранить в облако VK</span>
           </button>
           <button id="btn-export-save" class="cyber-btn">
-            <span>📤 Экспорт сохранения</span>
+            <span>📤 Экспорт кода</span>
           </button>
           <button id="btn-import-save" class="cyber-btn">
-            <span>📥 Импорт сохранения</span>
+            <span>📥 Импорт кода</span>
           </button>
           <button id="btn-reset-game" class="cyber-btn danger">
             <span>🗑️ Сбросить прогресс</span>
@@ -359,25 +547,25 @@
     </div>
   </div>
 
-  <!-- Modal: Offline Progress Greeting -->
+  <!-- Modal: Offline Progress Greeting (4.2.1 Rewarded Ad) -->
   <div id="modal-offline" class="modal-overlay hidden">
     <div class="modal-box offline-modal">
       <div class="modal-header">
-        <h2 class="modal-title">✨ С возвращением!</h2>
-        <button class="modal-close" data-close="modal-offline">&times;</button>
+        <h2 class="modal-title">🖤 С возвращением!</h2>
+        <button class="modal-close" data-close="modal-offline" onclick="if(window.altushkaGame) window.altushkaGame.closeModal('modal-offline');">&times;</button>
       </div>
       <div class="modal-body text-center">
-        <p class="offline-greeting">Пока вас не было в матрице (<span id="offline-time">0m</span>), ваши авто-системы трудились:</p>
+        <p class="offline-greeting">Пока вас не было (<span id="offline-time">0m</span>), альтушка фармила доход:</p>
         <div class="offline-reward">
-          <span class="offline-icon">💰</span>
-          <span id="offline-earned" class="neon-cyan font-bold">+0</span>
-          <span class="offline-unit">Вайба</span>
+          <span class="offline-icon">🖤</span>
+          <span id="offline-earned" class="neon-purple font-bold">+0</span>
+          <span class="offline-unit">Альт-коинов</span>
         </div>
         <div class="offline-actions-row">
-          <button id="btn-claim-offline-x2" class="cyber-btn primary large ad-claim-btn" title="Смотреть рекламу и удвоить награду!">
-            <span>🎬 Забрать x2 Вайб (+ реклама)</span>
+          <button id="btn-claim-offline-x2" class="cyber-btn primary large ad-claim-btn" title="Смотреть рекламу VK и удвоить награду!">
+            <span>🎬 Забрать x2 (+ реклама VK)</span>
           </button>
-          <button id="btn-claim-offline" class="cyber-btn large">
+          <button id="btn-claim-offline" class="cyber-btn large" onclick="if(window.altushkaGame) window.altushkaGame.closeModal('modal-offline');">
             <span>Обычный сбор</span>
           </button>
         </div>
@@ -386,8 +574,8 @@
   </div>
 
   <!-- Scripts with cache busters -->
-  <script src="audio.js?v=5"></script>
-  <script src="particles.js?v=5"></script>
-  <script src="game.js?v=5"></script>
+  <script src="audio.js?v=15"></script>
+  <script src="particles.js?v=15"></script>
+  <script src="game.js?v=15"></script>
 </body>
 </html>
