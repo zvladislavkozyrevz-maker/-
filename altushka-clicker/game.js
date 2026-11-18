@@ -853,11 +853,9 @@ class AltushkaGame {
     this.updateStartMenuStatus();
     this.updateUI();
 
-    // Dev / Test mode detection for auto-clicker
-    const urlParams = new URLSearchParams(window.location.search);
-    const isDev = urlParams.has('dev') || urlParams.has('test') || urlParams.has('autotap');
+    // Auto-clicker turbo button enabled for testing
     if (this.dom.btnTurboClicker) {
-      this.dom.btnTurboClicker.style.display = isDev ? 'inline-flex' : 'none';
+      this.dom.btnTurboClicker.style.display = 'inline-flex';
     }
     window.enableAutoTap = () => {
       if (this.dom.btnTurboClicker) this.dom.btnTurboClicker.style.display = 'inline-flex';
@@ -865,7 +863,6 @@ class AltushkaGame {
     };
     window.disableAutoTap = () => {
       this.stopAutoClicker();
-      if (this.dom.btnTurboClicker) this.dom.btnTurboClicker.style.display = 'none';
     };
 
     // Start Main Game Loop
