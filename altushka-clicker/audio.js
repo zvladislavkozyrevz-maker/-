@@ -22,9 +22,15 @@ class AltushkaAudioEngine {
     this.volume = 0.7;
     this.currentLevel = 1; // 1 to 5
 
-    // Lo-Fi Darkwave music step sequencer
-    this.musicTimer = null;
-    this.musicStep = 0;
+    // High-Fidelity Soundtrack per Stage (Reflecting Altushka's Cultural Evolution)
+    this.stageTracks = {
+      1: 'assets/audio/track_stage1.mp3', // Level 1: Carefree (calm, cozy, acoustic normis home)
+      2: 'assets/audio/track_stage2.mp3', // Level 2: Cool Rock (indie / pop-punk starter alt rebellion)
+      3: 'assets/audio/track_stage3.mp3', // Level 3: Organic Grunge (gritty garage rock, raw distortion)
+      4: 'assets/audio/track_stage4.mp3', // Level 4: Equatorial Complex (darkwave / witch-house drain)
+      5: 'assets/audio/track_stage5.mp3'  // Level 5: Cut Trance (explosive club rave, pumping trance)
+    };
+    this.bgAudio = null;
     this.isMusicPlaying = false;
     this.lastClickSoundTime = 0;
 
@@ -43,7 +49,12 @@ class AltushkaAudioEngine {
   }
 
   setLevel(lvl) {
-    this.currentLevel = Math.max(1, Math.min(5, lvl));
+    const newLvl = Math.max(1, Math.min(5, lvl));
+    const changed = this.currentLevel !== newLvl;
+    this.currentLevel = newLvl;
+    if (changed && this.musicEnabled) {
+      this.playStageMusic(this.currentLevel);
+    }
   }
 
   init() {
@@ -59,16 +70,12 @@ class AltushkaAudioEngine {
       this.sfxGain = this.ctx.createGain();
       this.sfxGain.gain.setValueAtTime(this.sfxEnabled ? 1 : 0, this.ctx.currentTime);
       this.sfxGain.connect(this.masterGain);
-
-      this.musicGain = this.ctx.createGain();
-      this.musicGain.gain.setValueAtTime(this.musicEnabled ? 0.55 : 0, this.ctx.currentTime);
-      this.musicGain.connect(this.masterGain);
-
-      if (this.musicEnabled) {
-        this.startMusic();
-      }
     } else if (this.ctx.state === 'suspended') {
       this.ctx.resume().catch(() => {});
+    }
+
+    if (this.musicEnabled && (!this.bgAudio || this.bgAudio.paused)) {
+      this.playStageMusic(this.currentLevel);
     }
   }
 
@@ -95,6 +102,9 @@ class AltushkaAudioEngine {
     if (this.masterGain && this.ctx) {
       this.masterGain.gain.setValueAtTime(this.volume, this.ctx.currentTime);
     }
+    if (this.bgAudio) {
+      this.bgAudio.volume = Math.max(0, Math.min(1, this.volume * 0.75));
+    }
     this.saveSettings();
   }
 
@@ -114,10 +124,7 @@ class AltushkaAudioEngine {
     }
     this.musicEnabled = !this.musicEnabled;
     if (this.musicEnabled) {
-      if (this.musicGain && this.ctx) {
-        this.musicGain.gain.setValueAtTime(0.55, this.ctx.currentTime);
-      }
-      this.startMusic();
+      this.playStageMusic(this.currentLevel);
     } else {
       this.stopMusic();
     }
@@ -406,164 +413,61 @@ class AltushkaAudioEngine {
   }
 
   /**
-   * PROCEDURAL LO-FI / DARKWAVE MELODIC AMBIENT (Chill, atmospheric, zero drone)
+   * HIGH-FIDELITY STAGE SOUNDTRACK SYSTEM
+   * Plays unique, tailored music tracks for each evolution level:
+   * Level 1: Carefree (calm, cozy, acoustic normis home)
+   * Level 2: Cool Rock (indie / pop-punk starter alt rebellion)
+   * Level 3: Organic Grunge (gritty garage rock, raw distortion)
+   * Level 4: Equatorial Complex (darkwave / witch-house drain)
+   * Level 5: Cut Trance (explosive club rave, pumping trance)
    */
-  /**
-   * PROCEDURAL LO-FI / DARKWAVE MELODIC AMBIENT («Альт-фон»)
-   * Lush analog pads, melodic arpeggios, and warm basslines.
-   */
-  startMusic() {
-    if (this.isMusicPlaying || !this.musicEnabled) return;
-    this.init();
-    if (!this.ctx) return;
-    if (this.ctx.state === 'suspended') {
-      this.ctx.resume().catch(() => {});
+  playStageMusic(level = this.currentLevel) {
+    if (!this.musicEnabled) return;
+    const trackSrc = this.stageTracks[level] || this.stageTracks[1];
+
+    if (this.bgAudio && this.bgAudio.getAttribute('data-level') == level && !this.bgAudio.paused) {
+      return;
     }
 
-    if (this.musicGain) {
+    if (this.bgAudio) {
       try {
-        this.musicGain.gain.cancelScheduledValues(this.ctx.currentTime);
-        this.musicGain.gain.setValueAtTime(0.55, this.ctx.currentTime);
+        this.bgAudio.pause();
+        this.bgAudio = null;
       } catch (e) {}
     }
 
-    this.isMusicPlaying = true;
-    this.musicStep = 0;
+    try {
+      const audio = new Audio(trackSrc);
+      audio.loop = true;
+      audio.volume = Math.max(0, Math.min(1, this.volume * 0.75));
+      audio.setAttribute('data-level', level);
 
-    // Atmospheric Alt-Wave chord progression: Dm -> Bb -> F -> C
-    const chords = [
-      { bass: 146.83, pad: [220.00, 261.63, 349.23], arps: [293.66, 349.23, 440.00, 523.25] },
-      { bass: 116.54, pad: [233.08, 293.66, 349.23], arps: [233.08, 293.66, 349.23, 466.16] },
-      { bass: 174.61, pad: [220.00, 261.63, 349.23], arps: [261.63, 349.23, 392.00, 523.25] },
-      { bass: 130.81, pad: [196.00, 261.63, 329.63], arps: [261.63, 329.63, 392.00, 493.88] }
-    ];
-
-    // Trigger initial warm pad immediately
-    this.playAmbientPad(chords[0].pad);
-
-    this.musicTimer = setInterval(() => {
-      if (!this.isMusicPlaying || !this.ctx) return;
-      if (this.ctx.state === 'suspended') {
-        this.ctx.resume().catch(() => {});
-        return;
+      const p = audio.play();
+      if (p !== undefined) {
+        p.then(() => {
+          this.bgAudio = audio;
+          this.isMusicPlaying = true;
+          console.log(`[AudioEngine] 🎵 Now playing Stage ${level} track: ${trackSrc}`);
+        }).catch(err => {
+          console.warn('[AudioEngine] Playback awaiting user gesture:', err);
+        });
       }
-
-      const chordIdx = Math.floor(this.musicStep / 4) % chords.length;
-      const stepInChord = this.musicStep % 4;
-      const curChord = chords[chordIdx];
-      const t = this.ctx.currentTime;
-
-      // 1. Play continuous lush darkwave pad at start of each chord
-      if (stepInChord === 0) {
-        this.playAmbientPad(curChord.pad);
-        this.playSoftBass(curChord.bass, t);
-      } else if (stepInChord === 2) {
-        this.playSoftBass(curChord.bass * 1.5, t);
-      }
-
-      // 2. Melodic synth pluck
-      const note = curChord.arps[this.musicStep % curChord.arps.length];
-      this.playSoftPluck(note, t);
-
-      this.musicStep++;
-    }, 550);
-  }
-
-  playAmbientPad(notes) {
-    if (!this.ctx || !this.musicGain || !this.isMusicPlaying) return;
-    const t = this.ctx.currentTime;
-    notes.forEach((freq, idx) => {
-      const osc = this.ctx.createOscillator();
-      const filter = this.ctx.createBiquadFilter();
-      const gain = this.ctx.createGain();
-
-      osc.type = idx % 2 === 0 ? 'sawtooth' : 'triangle';
-      osc.frequency.setValueAtTime(freq, t);
-      osc.detune.setValueAtTime((idx - 1) * 8, t);
-
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(950, t);
-
-      gain.gain.setValueAtTime(0.001, t);
-      gain.gain.linearRampToValueAtTime(0.09, t + 0.35);
-      gain.gain.setValueAtTime(0.09, t + 1.8);
-      gain.gain.linearRampToValueAtTime(0.001, t + 2.3);
-
-      osc.connect(filter);
-      filter.connect(gain);
-      gain.connect(this.musicGain);
-
-      osc.onended = () => this.safeDisconnect(osc, filter, gain);
-      osc.start(t);
-      osc.stop(t + 2.35);
-    });
-  }
-
-  playSoftPluck(freq, t) {
-    if (!this.ctx || !this.musicGain) return;
-    const osc = this.ctx.createOscillator();
-    const filter = this.ctx.createBiquadFilter();
-    const gain = this.ctx.createGain();
-
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(freq, t);
-
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(1400, t);
-    filter.frequency.exponentialRampToValueAtTime(500, t + 0.55);
-
-    gain.gain.setValueAtTime(0.001, t);
-    gain.gain.linearRampToValueAtTime(0.22, t + 0.03);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
-
-    osc.connect(filter);
-    filter.connect(gain);
-    gain.connect(this.musicGain);
-
-    osc.onended = () => this.safeDisconnect(osc, filter, gain);
-
-    osc.start(t);
-    osc.stop(t + 0.58);
-  }
-
-  playSoftBass(freq, t) {
-    if (!this.ctx || !this.musicGain) return;
-    const osc = this.ctx.createOscillator();
-    const filter = this.ctx.createBiquadFilter();
-    const gain = this.ctx.createGain();
-
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(freq, t);
-
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(360, t);
-
-    gain.gain.setValueAtTime(0.001, t);
-    gain.gain.linearRampToValueAtTime(0.35, t + 0.05);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 1.6);
-
-    osc.connect(filter);
-    filter.connect(gain);
-    gain.connect(this.musicGain);
-
-    osc.onended = () => this.safeDisconnect(osc, filter, gain);
-
-    osc.start(t);
-    osc.stop(t + 1.65);
+    } catch (e) {
+      console.warn('[AudioEngine] Could not load stage audio', e);
+    }
   }
 
   stopMusic() {
-    if (this.musicTimer) {
-      clearInterval(this.musicTimer);
-      this.musicTimer = null;
-    }
-    if (this.musicGain && this.ctx) {
+    if (this.bgAudio) {
       try {
-        this.musicGain.gain.cancelScheduledValues(this.ctx.currentTime);
-        this.musicGain.gain.setValueAtTime(0.001, this.ctx.currentTime);
+        this.bgAudio.pause();
       } catch (e) {}
     }
     this.isMusicPlaying = false;
+  }
+
+  startMusic() {
+    this.playStageMusic(this.currentLevel);
   }
 }
 
